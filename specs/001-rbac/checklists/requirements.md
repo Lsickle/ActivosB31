@@ -32,4 +32,4 @@
 ## Notes
 
 - Iteración 1: sin marcadores de clarificación; las decisiones de alcance quedaron en RN-009, RN-010, RN-013, RN-014 y RN-015.
-- Supuestos a confirmar (no bloquean): permisos iniciales del Almacenista (FR-003), política de contraseña de 10 caracteres con letras y números, bloqueo por intentos fuera de esta feature.
+- Confirmado por el usuario (2026-10-17): permisos iniciales del Almacenista (FR-003) y rol único guardado en el usuario. Bloqueo por intentos fuera de esta feature.

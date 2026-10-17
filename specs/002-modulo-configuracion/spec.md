@@ -113,7 +113,7 @@ El usuario define los tipos de ubicación (p. ej. "Bodega", "Vehículo", "Oficin
 - **SC-004**: La búsqueda en un catálogo de 500 registros muestra resultados en menos de 1 segundo percibido por el usuario.
 - **SC-005**: Las opciones disponibles que reciben otros módulos nunca incluyen categorías, tipos ni ubicaciones inactivos.
 
-## Datos iniciales (RN-012) — PROPUESTA, pendiente de confirmar por el usuario
+## Datos iniciales (RN-012) — confirmados por el usuario (2026-10-17)
 
 S = serializado, C = por cantidad (RN-007).
 
