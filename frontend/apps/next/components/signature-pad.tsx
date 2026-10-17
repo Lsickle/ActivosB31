@@ -12,6 +12,26 @@ import { cn } from '@/lib/utils'
 // se recargan los trazos con toData/fromData (cambiar el tamaño del canvas lo
 // borra). El resultado se exporta como PNG (D-002).
 
+/**
+ * B-4 (revisión de seguridad de 007): ancho máximo del PNG exportado. En
+ * pantallas anchas o con devicePixelRatio alto el canvas real puede superar
+ * los límites del backend (≤ 2000 px por lado, ≤ 300 KB); se exporta una copia
+ * escalada que conserva la proporción.
+ */
+export const MAX_EXPORT_WIDTH = 1000
+
+function exportPng(pad: SignaturePadLib, canvas: HTMLCanvasElement | null): string {
+  if (!canvas || canvas.width <= MAX_EXPORT_WIDTH) return pad.toDataURL('image/png')
+
+  const output = document.createElement('canvas')
+  output.width = MAX_EXPORT_WIDTH
+  output.height = Math.max(1, Math.round((canvas.height * MAX_EXPORT_WIDTH) / canvas.width))
+  const context = output.getContext('2d')
+  if (!context) return pad.toDataURL('image/png')
+  context.drawImage(canvas, 0, 0, output.width, output.height)
+  return output.toDataURL('image/png')
+}
+
 export type SignaturePadHandle = {
   isEmpty: () => boolean
   /** Data URL `image/png`, o null si no hay firma. */
@@ -77,7 +97,7 @@ export function SignaturePad({
 
     const handleEndStroke = () => {
       setIsEmpty(pad.isEmpty())
-      onChangeRef.current?.(pad.isEmpty() ? null : pad.toDataURL('image/png'))
+      onChangeRef.current?.(pad.isEmpty() ? null : exportPng(pad, canvas))
     }
     pad.addEventListener('endStroke', handleEndStroke)
 
@@ -108,7 +128,7 @@ export function SignaturePad({
       isEmpty: () => padRef.current?.isEmpty() ?? true,
       toDataURL: () => {
         const pad = padRef.current
-        return pad && !pad.isEmpty() ? pad.toDataURL('image/png') : null
+        return pad && !pad.isEmpty() ? exportPng(pad, canvasRef.current) : null
       },
       clear,
     }),

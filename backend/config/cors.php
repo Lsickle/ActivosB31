@@ -27,7 +27,9 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    // 008 (D-002): el frontend lee el nombre del archivo descargado; sin
+    // esto, con el frontend en otro origen (dev), el navegador lo oculta.
+    'exposed_headers' => ['Content-Disposition'],
 
     'max_age' => 0,
 

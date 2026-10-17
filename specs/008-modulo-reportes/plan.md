@@ -33,10 +33,10 @@ Los reportes aceptan `format=json|xlsx|pdf` (por defecto `json`). Detalle en [co
 
 ## Tareas
 
-- [ ] T001 Instalar dependencias (versiones de `docs/infraestructura.md`), config dompdf segura
-- [ ] T002 Tests + clases de reporte (D-001) y endpoints JSON con permisos (D-003)
-- [ ] T003 Tests + exportación Excel y PDF (D-002, D-005)
-- [ ] T004 Tests + `/api/dashboard` (D-004)
+- [x] T001 Instalar dependencias (versiones de `docs/infraestructura.md`), config dompdf segura
+- [x] T002 Tests + clases de reporte (D-001) y endpoints JSON con permisos (D-003)
+- [x] T003 Tests + exportación Excel y PDF (D-002, D-005)
+- [x] T004 Tests + `/api/dashboard` (D-004)
 - [x] T005 Frontend `/reportes` y descarga de archivos (+ tests). Contrato fijado en [contracts/api.md](contracts/api.md) (incluye `GET /api/reports/asset-options` y `Content-Disposition` en `exposed_headers` de CORS); `apiDownload` en `packages/app/lib/api-client.ts`.
 - [x] T006 Frontend Inicio con alertas (+ tests)
 - [ ] T007 Suites, navegador, `CLAUDE.md`

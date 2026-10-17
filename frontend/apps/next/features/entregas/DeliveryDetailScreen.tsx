@@ -172,7 +172,10 @@ function DeliveryDetail({ deliveryId }: { deliveryId: number }) {
                   className="h-40 w-full rounded-lg border bg-white object-contain"
                 />
               ) : (
-                <p className="text-sm text-muted-foreground">No fue posible mostrar la firma.</p>
+                // M-1 (provisional, pregunta 33A): sin entregas.gestionar ni
+                // empleados.ver el backend no envía signature_url; la firma
+                // existe (es obligatoria, RN-024) pero no se muestra.
+                <p className="text-sm text-muted-foreground">Firma registrada</p>
               )}
             </CardContent>
           </Card>

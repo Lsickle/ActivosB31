@@ -12,13 +12,25 @@ use Illuminate\Validation\Rule;
 /**
  * US1-5: listado paginado de activos (25 por defecto, máximo 100) con
  * búsqueda por placa, serial, marca o modelo y filtros por categoría, tipo,
- * estado, ubicación y poseedor. Requiere activos.ver (FR-007).
+ * estado, ubicación y poseedor. Requiere activos.ver (FR-007) o, para el
+ * asistente de entrega (007), entregas.gestionar: en ese caso solo se
+ * listan activos Disponibles (onlyAvailable()).
  */
 class ListAssetsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('viewAny', Asset::class);
+        return $this->user()->can('viewAny', Asset::class)
+            || $this->user()->can('viewAvailableForDelivery', Asset::class);
+    }
+
+    /**
+     * Sin activos.ver (acceso solo por entregas.gestionar) el listado se
+     * limita a los activos Disponibles, sea cual sea el filtro de estado.
+     */
+    public function onlyAvailable(): bool
+    {
+        return ! $this->user()->can('viewAny', Asset::class);
     }
 
     /**

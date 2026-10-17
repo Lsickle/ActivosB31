@@ -108,6 +108,17 @@ describe('DeliveryDetailScreen (/entregas/[id], 007 US2, US3)', () => {
     expect(screen.queryByRole('button', { name: /Editar|Eliminar/ })).not.toBeInTheDocument()
   })
 
+  it('M-1: sin signature_url (sin permiso para ver la firma) muestra "Firma registrada" sin imagen ni error', async () => {
+    const { signature_url: _omitted, ...withoutSignature } = withReturns
+    get.mockResolvedValue({ data: withoutSignature })
+    render(<DeliveryDetailScreen />)
+
+    const section = await screen.findByRole('region', { name: 'Firma' })
+    expect(within(section).getByText('Firma registrada')).toBeInTheDocument()
+    expect(within(section).queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.queryByText('No fue posible mostrar la firma.')).not.toBeInTheDocument()
+  })
+
   it('sin entregas.ver muestra "Acceso denegado"', () => {
     useRequireAuth.mockReturnValue({ isAuthorized: false, isForbidden: true })
     render(<DeliveryDetailScreen />)
@@ -194,6 +205,15 @@ describe('DeliveryDetailScreen (/entregas/[id], 007 US2, US3)', () => {
     expect(within(helmet).getByText('Describe qué pasó con el artículo perdido.')).toBeInTheDocument()
     expect(within(gloves).getByText('Máximo 1 (pendiente).')).toBeInTheDocument()
     expect(createReturn).not.toHaveBeenCalled()
+  })
+
+  it('la observación de la devolución advierte no escribir datos personales ni de salud (Ley 1581)', async () => {
+    render(<DeliveryDetailScreen />)
+    const dialog = await openReturnDialog()
+    const gloves = within(dialog).getByRole('group', { name: 'Guantes de rescate' })
+    fireEvent.change(within(gloves).getByLabelText('Cantidad a devolver'), { target: { value: '1' } })
+
+    expect(within(gloves).getByLabelText(/Observación/)).toHaveAccessibleDescription('No escribas datos personales ni de salud.')
   })
 
   it('sin artículos marcados no envía', async () => {

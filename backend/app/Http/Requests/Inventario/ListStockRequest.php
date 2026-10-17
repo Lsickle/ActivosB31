@@ -10,13 +10,15 @@ use Illuminate\Foundation\Http\FormRequest;
 /**
  * US2 / FR-003: existencias por tipo y ubicación, paginadas (25 por defecto,
  * máximo 100), con filtros por categoría, tipo, ubicación y "bajo mínimo"
- * (RN-028). Requiere inventario.ver.
+ * (RN-028). Requiere inventario.ver o, para el asistente de entrega (007),
+ * entregas.gestionar.
  */
 class ListStockRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('viewAny', StockLevel::class);
+        return $this->user()->can('viewAny', StockLevel::class)
+            || $this->user()->can('viewForDelivery', StockLevel::class);
     }
 
     /**
@@ -32,6 +34,16 @@ class ListStockRequest extends FormRequest
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
+    }
+
+    /**
+     * B-2 (revisión de seguridad de 007): el filtro "bajo mínimo" (alertas de
+     * stock, RN-028) solo aplica con inventario.ver; con acceso solo por
+     * entregas.gestionar se ignora.
+     */
+    public function belowMin(): bool
+    {
+        return $this->boolean('below_min') && $this->user()->can('viewAny', StockLevel::class);
     }
 
     public function perPage(): int

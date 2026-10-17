@@ -5,7 +5,7 @@ description: Esquema de la base de datos de ActivosB31 (PostgreSQL 17) en format
 
 # Esquema de base de datos — ActivosB31
 
-> **Estado**: migradas las tablas base, las de RBAC (001-rbac), las de Configuración (002-modulo-configuracion), las de Seguridad (003-seguridad-bitacora), las de Empleados (004-modulo-empleados), las de Activos (005-modulo-activos) y las de Inventario (006-modulo-inventario); el resto de módulos está **pendiente de diseño** (ver `docs/modulos.md` y sus preguntas abiertas). Cada diseño se documenta aquí ANTES de escribir las migraciones, y el usuario lo aprueba.
+> **Estado**: migradas las tablas base, las de RBAC (001-rbac), las de Configuración (002-modulo-configuracion), las de Seguridad (003-seguridad-bitacora), las de Empleados (004-modulo-empleados), las de Activos (005-modulo-activos), las de Inventario (006-modulo-inventario) y las de Entregas (007-modulo-entregas); el resto de módulos está **pendiente de diseño** (ver `docs/modulos.md` y sus preguntas abiertas). Cada diseño se documenta aquí ANTES de escribir las migraciones, y el usuario lo aprueba.
 
 ## Convenciones
 
@@ -205,7 +205,7 @@ asset_events(id, asset_id FK, event varchar(30),        -- App\Enums\AssetEventT
              from_status varchar(20) NULL, to_status varchar(20) NULL,
              from_location_id FK -> locations NULL, to_location_id FK -> locations NULL,
              employee_id FK -> employees NULL idx,
-             delivery_id bigint NULL idx,               -- sin FK hasta que 007 cree deliveries (agregarla allí)
+             delivery_id FK -> deliveries NULL idx,     -- FK agregada en 007 (2026_10_17_800003)
              user_id FK -> users, notes text NULL,      -- notes: motivo de baja/cambio de estado, descripción del mantenimiento
              changes jsonb NULL,                        -- AJUSTE DE IMPLEMENTACIÓN: {campo:{from,to}} en 'updated' (D-002)
              created_at timestamptz DEFAULT now(),      -- sin updated_at
@@ -256,7 +256,7 @@ inventory_counts(id, location_id FK -> locations RESTRICT idx,
 inventory_movements(id, type varchar(20),                -- App\Enums\MovementType
                     asset_type_id FK -> asset_types idx, quantity integer,
                     from_location_id FK -> locations NULL idx, to_location_id FK -> locations NULL idx,
-                    delivery_id bigint NULL idx,         -- sin FK hasta que 007 cree deliveries (agregarla allí)
+                    delivery_id FK -> deliveries NULL idx,   -- FK agregada en 007 (2026_10_17_800003)
                     count_id FK -> inventory_counts NULL idx,   -- ajuste generado al cerrar un conteo (RN-027)
                     reason varchar(500) NULL, user_id FK -> users,
                     created_at timestamptz(6) DEFAULT now(),    -- sin updated_at
@@ -285,23 +285,72 @@ Reglas asociadas:
 - D-004: al abrir un conteo se crean renglones de tipos por cantidad con existencia > 0 y de activos serializados en `available`/`maintenance` con esa ubicación. Al cerrar se recalcula lo esperado (con las existencias bloqueadas), se crean ajustes con `count_id` y los serializados sin marcar quedan `found = false` (RN-037: no cambian de estado).
 - Ajustes al migrar (de implementación): CHECKs de ubicaciones por clase, de estado de cierre y de clase de renglón; índices únicos parciales de renglones; índices en FKs y `(created_at, id)`; `notes varchar(500)`; `created_at/opened_at/closed_at` con precisión de microsegundos (para `changed_since_open`, US3-4); `stock_levels.updated_at timestamptz`.
 
-## APROBADO por el usuario (2026-10-17) — pendiente de migrar
+## Entregas (feature 007-modulo-entregas, migrado 2026-10-17)
 
-> Aprobado completo (pregunta 17). Cada bloque pasa a "migrado" en el mismo cambio que su feature crea las migraciones. Ajustes menores de implementación (índices, longitudes) se documentan aquí al migrar.
-
-### 007 — Entregas (RN-023..RN-026)
+Aprobado por el usuario (pregunta 17). Sin `softDeletes`: entregas y devoluciones son de solo inserción; FK `RESTRICT`/sin `ON DELETE`.
 
 ```sql
-deliveries(id, code varchar(20) UNIQUE,                 -- consecutivo ENT-000001
-           employee_id FK RESTRICT, kind CHECK IN ('dotacion','prestamo'),   -- RN-023
-           due_on date NULL,                            -- obligatoria si es préstamo
-           from_location_id FK -> locations,            -- de dónde salen los artículos por cantidad
-           signature_path varchar(255),                 -- RN-024, imagen en R2
-           notes text NULL, delivered_by FK users, delivered_at timestamptz, created_at)   -- no se edita
-delivery_items(id, delivery_id FK, asset_id FK NULL,    -- serializado
-               asset_type_id FK, quantity integer CHECK > 0, returned_quantity integer DEFAULT 0)
-delivery_returns(id, delivery_item_id FK, quantity integer CHECK > 0,
-                 condition CHECK IN ('good','damaged','lost'),   -- RN-026
-                 to_location_id FK NULL, notes NULL, received_by FK users, returned_at, created_at)
+-- 2026_10_17_800000_create_deliveries_table — SOLO INSERCIÓN (triggers con prevent_row_changes():
+--   deliveries_immutable_rows / deliveries_immutable_truncate)
+-- SEQUENCE deliveries_code_seq (OWNED BY deliveries.code)          -- D-001
+deliveries(id, code varchar(20) UNIQUE
+               DEFAULT 'ENT-' || lpad(nextval('deliveries_code_seq')::text, 6, '0'),   -- consecutivo ENT-000001
+           employee_id FK -> employees RESTRICT idx,
+           kind varchar(20),                            -- App\Enums\DeliveryKind (RN-023)
+           due_on date NULL,                            -- solo y siempre en préstamos
+           from_location_id FK -> locations idx,        -- de dónde salen los artículos por cantidad
+           signature_path varchar(255),                 -- RN-024 / D-002: signatures/{id}.png en ASSETS_DISK (privado)
+           signature_sha256 char(64),                   -- M-3: agregada en 2026_10_17_800005 (ver abajo)
+           notes text NULL,                             -- máx. 1000 (validado en la app)
+           delivered_by FK -> users, delivered_at timestamptz,
+           created_at timestamptz DEFAULT now(),        -- sin updated_at: no se edita
+           INDEX(delivered_at, id),
+           CHECK deliveries_kind_check (kind IN ('dotacion','prestamo')),
+           CHECK deliveries_due_on_check ((kind = 'prestamo') = (due_on IS NOT NULL)))
+-- 2026_10_17_800001_create_delivery_items_table — NO es de solo inserción: returned_quantity se acumula (D-004)
+delivery_items(id, delivery_id FK idx, asset_id FK -> assets NULL idx,   -- serializado
+               asset_type_id FK idx, quantity integer, returned_quantity integer DEFAULT 0,   -- sin timestamps
+               CHECK delivery_items_quantity_check (quantity > 0),
+               CHECK delivery_items_returned_quantity_check (returned_quantity BETWEEN 0 AND quantity),
+               CHECK delivery_items_asset_quantity_check (asset_id IS NULL OR quantity = 1),
+               UNIQUE INDEX delivery_items_delivery_asset_unique (delivery_id, asset_id) WHERE asset_id IS NOT NULL,
+               UNIQUE INDEX delivery_items_delivery_type_unique (delivery_id, asset_type_id) WHERE asset_id IS NULL,
+               UNIQUE INDEX delivery_items_pending_asset_unique (asset_id)
+                 WHERE asset_id IS NOT NULL AND returned_quantity < quantity)   -- un activo, una sola entrega pendiente
+-- 2026_10_17_800002_create_delivery_returns_table — SOLO INSERCIÓN (triggers con prevent_row_changes())
+delivery_returns(id, delivery_item_id FK idx, quantity integer,
+                 condition varchar(20),                 -- App\Enums\ReturnCondition (RN-026)
+                 to_location_id FK -> locations NULL idx, notes text NULL,
+                 received_by FK -> users, returned_at timestamptz, created_at timestamptz DEFAULT now(),
+                 CHECK delivery_returns_quantity_check (quantity > 0),
+                 CHECK delivery_returns_condition_check (condition IN ('good','damaged','lost')),
+                 CHECK delivery_returns_location_check (good → con ubicación; lost → sin ubicación; damaged → libre:
+                   serializado con ubicación, por cantidad sin ella, RN-038),
+                 CHECK delivery_returns_lost_notes_check (condition <> 'lost' OR btrim(notes) <> ''))
+-- 2026_10_17_800003_add_delivery_foreign_keys
+--   inventory_movements.delivery_id y asset_events.delivery_id → FK deliveries
+--   (inventory_movements_delivery_id_foreign, asset_events_delivery_id_foreign)
+-- 2026_10_17_800004_guard_delivery_items — M-2 (revisión de seguridad de 007)
+--   FUNCTION delivery_items_guard(): UPDATE solo si la fila sin returned_quantity queda igual
+--     (to_jsonb(NEW) - 'returned_quantity' = to_jsonb(OLD) - 'returned_quantity') y
+--     NEW.returned_quantity >= OLD.returned_quantity; DELETE rechazado (ERRCODE insufficient_privilege)
+--   TRIGGER delivery_items_guard_rows BEFORE UPDATE OR DELETE FOR EACH ROW → delivery_items_guard()
+--   TRIGGER delivery_items_immutable_truncate BEFORE TRUNCATE → prevent_row_changes()
+-- 2026_10_17_800005_add_signature_sha256_to_deliveries_table — M-3 (revisión de seguridad de 007)
+--   deliveries.signature_sha256 char(64) NOT NULL,      -- SHA-256 (hex minúsculas) del PNG de la firma
+--     CHECK deliveries_signature_sha256_check (signature_sha256 ~ '^[0-9a-f]{64}$')
+--   Relleno de filas previas: hash del archivo; si falta el archivo, 64 ceros solo en local
+--   (en otro entorno la migración falla).
 ```
+
+Reglas asociadas:
+- D-001: el consecutivo lo asigna el DEFAULT de `code`; `App\Models\Delivery` lo lee tras insertar. `App\Actions\Entregas\CreateDelivery` reserva el `id` con `nextval(pg_get_serial_sequence('deliveries','id'))` para fijar `signature_path` sin actualizar la fila inmutable.
+- D-002: la firma (data URL PNG ≤ 300 KB, ≤ 2000 px) se re-codifica con Intervention (`ProcessDeliverySignature`) y se escribe al final de la transacción; si algo falla se borra el archivo.
+- D-003 / D-004: entregas y devoluciones solo con `CreateDelivery` / `RegisterDeliveryReturn`. Orden de bloqueo: ítems de la entrega (devoluciones) → activos por id (`AssignAsset`/`ReleaseAsset`) → existencias por `(asset_type_id, location_id)` (`RecordStockMovement`: delivery / return / loss, RN-038).
+- D-005: estado derivado (sin columna): `closed` sin pendientes; `overdue` préstamo con pendientes y `due_on` < hoy en America/Bogota; si no, `open` (`Delivery::status()` y scope `withStatus`).
+- Ajustes al migrar (de implementación): CHECKs de tipo/fecha esperada, cantidades, serializado = 1 unidad, ubicación y observación por estado de devolución; índices únicos parciales de ítems (incluido "un activo pendiente en una sola entrega"); índices en FKs y `(delivered_at, id)`; `created_at timestamptz` sin `updated_at`; `delivery_items` sin timestamps.
+- Ajustes de la revisión de seguridad de 007 (pedidos por el hilo principal):
+  - M-2: `delivery_items` solo admite aumentar `returned_quantity` (trigger `delivery_items_guard_rows`); sin DELETE ni TRUNCATE. Las limpiezas de pruebas con datos confirmados desactivan `delivery_items_guard_rows` dentro de su transacción (como `deliveries_immutable_rows`). Pendiente antes de datos reales: `GRANT UPDATE (returned_quantity)` por columna para el rol de la app.
+  - M-3: `signature_sha256` se calcula con `hash('sha256', $png)` en `CreateDelivery` antes del insert; `Delivery::signatureIntact()` lo compara con el archivo.
+  - B-1: `id`, `signature_path` y `signature_sha256` (Delivery) y `returned_quantity` (DeliveryItem) no son asignables en masa; `CreateDelivery` usa `forceCreate()` y las devoluciones `increment()`.
 

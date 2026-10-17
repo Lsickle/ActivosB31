@@ -41,3 +41,12 @@ Entregas inmutables (`deliveries`, `delivery_items`) con consecutivo `ENT-000001
 ## Orden
 
 1. Migraciones + modelos + secuencia. 2. Crear entrega (tests de atomicidad y concurrencia). 3. Devoluciones. 4. Estado/alertas/tenencias. 5. Frontend + `SignaturePad`. 6. Seguridad, QA, navegador, commit.
+
+## Revisión de seguridad (2026-10-17)
+
+Aplicado: M-2 (trigger `delivery_items_guard`), M-3 (`deliveries.signature_sha256` y `Delivery::signatureIntact()`), B-1 (atributos protegidos fuera de `Fillable`), B-2 (recurso reducido de `/api/assets` y `below_min` ignorado sin `inventario.ver` para el asistente), B-3 (firma ≥ 100 × 50 px y ≥ 0,5 % de píxeles de trazo), B-4 (el `SignaturePad` exporta a ≤ 1000 px de ancho), B-5 (ubicación desactivada en carrera → 422 en `items.N.to_location_id`), aviso de no escribir datos personales en las observaciones.
+
+Preguntas pendientes de confirmar por el usuario:
+
+- **Pregunta 33** — quién ve la imagen de la firma. **Provisional 33A, implementada**: `DeliveryPolicy::viewSignature` = `entregas.gestionar` o `empleados.ver`; con solo `entregas.ver` la ficha no trae `signature_url` y muestra "Firma registrada". Si el usuario elige otra opción, ajustar la policy y sus tests (`DeliveryHardeningTest`, M-1).
+- **Pregunta 35** — **provisional A, NO implementada**: queda pendiente hasta que el usuario la confirme.

@@ -191,6 +191,13 @@ describe('NewDeliveryScreen (/entregas/nueva, 007 US1, RN-023..RN-025)', () => {
     expect(screen.getByText('Indica la fecha de devolución esperada.')).toBeInTheDocument()
   })
 
+  it('Observaciones advierte no escribir datos personales ni de salud (Ley 1581)', async () => {
+    render(<NewDeliveryScreen />)
+    await chooseEmployee()
+    await next()
+    expect(screen.getByLabelText(/Observaciones/)).toHaveAccessibleDescription('No escribas datos personales ni de salud.')
+  })
+
   it('exige al menos un artículo (RN-025)', async () => {
     await goToItems()
     await next()

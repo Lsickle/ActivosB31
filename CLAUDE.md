@@ -133,6 +133,13 @@ Pendiente:
 1. **En el primer deploy**: confirmar qué IP ve Laravel detrás del proxy de Vercel (registrar temporalmente `$request->ip()` y `X-Forwarded-For`). Si es la IP de Vercel, el rate limit de 30/min por IP sería compartido por todos los usuarios: agregar un `middleware.ts` en Next que reenvíe la IP del cliente con un secreto compartido, validado en el backend.
 2. **Antes de datos reales**: reemplazar `php artisan serve` en `Dockerfile.render` por un servidor de producción (FrankenPHP/Octane o nginx + php-fpm; verificar con `stack-advisor`), cachear config/rutas al arrancar y sacar el seeding del arranque (o usar un `AdminUserSeeder` dedicado).
 3. **Antes de datos reales (feature aparte)**: bitácora de seguridad de solo inserción (quién crea usuarios, cambia roles, restablece contraseñas, edita la matriz; login/logout) y bloqueo por intentos fallidos. Recuperación de contraseña por correo cuando se defina el servicio de correo.
+3b. **Antes de datos reales (revisión de seguridad de 007, Entregas)**:
+   - Rol de la app en PostgreSQL sin ser dueño de las tablas y con `GRANT UPDATE (returned_quantity) ON delivery_items` por columna (además del trigger `delivery_items_guard_rows`).
+   - *Bucket lock* / retención (object lock) de R2 sobre el prefijo `signatures/` para que las firmas no se puedan sobrescribir ni borrar.
+   - Buckets separados por entorno (local, staging, producción); nunca compartir el de producción.
+   - Mencionar la firma manuscrita (dato personal) en el aviso de privacidad (Ley 1581).
+   - Límite de tamaño de cuerpo HTTP (~1 MB) en el servidor de producción (nginx/FrankenPHP), además de la validación de la firma (≤ 300 KB).
+   - Ya hecho en UI: aviso "No escribas datos personales ni de salud." bajo las observaciones de entregas y devoluciones; revisar que se mantenga.
 4. No conectar *preview deployments* de Vercel al backend real sin agregarlos explícitamente a CORS/Sanctum (nada de comodines).
 5. **En Render**: el scheduler (`sanctum:prune-expired` diario en `routes/console.php`) necesita un cron job o worker. `SESSION_DRIVER=database` es requisito: la revocación de sesiones borra filas de `sessions`.
 6. Riesgo aceptado por el usuario (M-4, Ley 1581): Almacenista y Consulta tienen `usuarios.ver` con correo y último ingreso; se puede retirar desde la matriz.

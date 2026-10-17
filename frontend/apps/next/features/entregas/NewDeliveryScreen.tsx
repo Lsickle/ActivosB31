@@ -28,7 +28,7 @@ import { CatalogSelectField } from '@/features/configuracion/CatalogFormDialog'
 import { optionsPlaceholder, useConfigurationOptions } from '@/features/configuracion/useConfigurationOptions'
 import { activeLocationItems, quantityTypeItems } from '@/features/inventario/shared'
 import { cn } from '@/lib/utils'
-import { formatQuantity } from './shared'
+import { formatQuantity, NOTES_PRIVACY_HINT } from './shared'
 
 // Asistente "Nueva entrega" (spec 007 US1; FR-001, FR-002; RN-023..RN-025,
 // RN-039; D-003). Pasos: empleado → tipo y fecha → origen → artículos → firma
@@ -546,9 +546,10 @@ function KindStep({
           </>
         }
         error={errors.notes}
+        description={NOTES_PRIVACY_HINT}
       >
         <textarea
-          {...fieldA11yProps('delivery-notes', errors.notes)}
+          {...fieldA11yProps('delivery-notes', errors.notes, true)}
           value={notes}
           maxLength={NOTES_MAX}
           rows={2}

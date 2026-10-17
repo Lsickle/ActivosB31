@@ -8,6 +8,10 @@ import { cn } from '@/lib/utils'
 
 export const muted = <span className="text-muted-foreground">—</span>
 
+// Revisión de seguridad de 007 (Ley 1581 de 2012): las observaciones de
+// entregas y devoluciones las ve todo el que tiene entregas.ver.
+export const NOTES_PRIVACY_HINT = 'No escribas datos personales ni de salud.'
+
 const DOT: Record<DeliveryStatus, string> = {
   open: 'bg-sky-500',
   closed: 'bg-emerald-500',

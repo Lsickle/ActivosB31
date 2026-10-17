@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Actions\Activos\CreateAsset;
 use App\Actions\Activos\StoreAssetPhoto;
 use App\Actions\Activos\UpdateAsset;
+use App\Enums\AssetStatus;
 use App\Http\Controllers\Concerns\TranslatesUniqueViolations;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Activos\ListAssetsRequest;
 use App\Http\Requests\Activos\StoreAssetRequest;
 use App\Http\Requests\Activos\UpdateAssetRequest;
+use App\Http\Resources\AssetForDeliveryResource;
 use App\Http\Resources\AssetResource;
 use App\Models\Asset;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,11 +44,21 @@ class AssetController extends Controller
         'holder.position:id,name',
     ];
 
+    /**
+     * B-2 (revisión de seguridad de 007): con solo entregas.gestionar el
+     * listado se limita a los Disponibles y usa AssetForDeliveryResource
+     * (sin valor, notas, poseedor ni mantenimientos).
+     */
     public function index(ListAssetsRequest $request): AnonymousResourceCollection
     {
+        $forDelivery = $request->onlyAvailable();
+
         $assets = Asset::query()
-            ->with(self::RELATIONS)
-            ->withNextMaintenance()
+            ->when(
+                $forDelivery,
+                fn (Builder $query) => $query->with(AssetForDeliveryResource::RELATIONS),
+                fn (Builder $query) => $query->with(self::RELATIONS)->withNextMaintenance(),
+            )
             ->search($request->validated('search'))
             ->when($request->filled('asset_category_id'), fn (Builder $query) => $query->whereHas(
                 'assetType',
@@ -54,6 +66,8 @@ class AssetController extends Controller
             ))
             ->when($request->filled('asset_type_id'), fn (Builder $query) => $query->where('asset_type_id', $request->integer('asset_type_id')))
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->validated('status')))
+            // 007: con solo entregas.gestionar, únicamente los Disponibles.
+            ->when($forDelivery, fn (Builder $query) => $query->where('status', AssetStatus::Available))
             ->when($request->filled('location_id'), fn (Builder $query) => $query->where('location_id', $request->integer('location_id')))
             ->when($request->filled('holder_employee_id'), fn (Builder $query) => $query->where('holder_employee_id', $request->integer('holder_employee_id')))
             ->orderBy('plate')
@@ -61,7 +75,9 @@ class AssetController extends Controller
             ->paginate($request->perPage())
             ->withQueryString();
 
-        return AssetResource::collection($assets);
+        return $forDelivery
+            ? AssetForDeliveryResource::collection($assets)
+            : AssetResource::collection($assets);
     }
 
     public function show(Asset $asset): AssetResource

@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\TrackingMode;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventario\ListStockRequest;
 use App\Http\Resources\StockLevelResource;
-use App\Models\AssetType;
 use App\Models\StockLevel;
+use App\Queries\StockAlerts;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -30,14 +28,14 @@ class InventoryStockController extends Controller
     {
         $levels = StockLevel::query()
             ->select('stock_levels.*', 'totals.type_total')
-            ->joinSub(self::typeTotals(), 'totals', 'totals.asset_type_id', '=', 'stock_levels.asset_type_id')
+            ->joinSub(StockAlerts::typeTotals(), 'totals', 'totals.asset_type_id', '=', 'stock_levels.asset_type_id')
             ->join('asset_types', 'asset_types.id', '=', 'stock_levels.asset_type_id')
             ->join('locations', 'locations.id', '=', 'stock_levels.location_id')
             ->where('stock_levels.quantity', '>', 0)
             ->when($request->filled('asset_category_id'), fn (Builder $query) => $query->where('asset_types.asset_category_id', $request->integer('asset_category_id')))
             ->when($request->filled('asset_type_id'), fn (Builder $query) => $query->where('stock_levels.asset_type_id', $request->integer('asset_type_id')))
             ->when($request->filled('location_id'), fn (Builder $query) => $query->where('stock_levels.location_id', $request->integer('location_id')))
-            ->when($request->boolean('below_min'), fn (Builder $query) => $query
+            ->when($request->belowMin(), fn (Builder $query) => $query
                 ->whereNotNull('asset_types.min_stock')
                 ->whereColumn('totals.type_total', '<', 'asset_types.min_stock'))
             ->with(['assetType:id,name,min_stock,asset_category_id', 'assetType.category:id,name', 'location:id,name,is_active'])
@@ -83,40 +81,13 @@ class InventoryStockController extends Controller
 
     /**
      * RN-028 / FR-005: tipos por cantidad disponibles (activos, de categoría
-     * activa) con stock mínimo y existencia total por debajo de él.
+     * activa) con stock mínimo y existencia total por debajo de él. La
+     * consulta vive en App\Queries\StockAlerts (compartida con Inicio, 008).
      */
-    public function alerts(): JsonResponse
+    public function alerts(StockAlerts $alerts): JsonResponse
     {
         Gate::authorize('viewAny', StockLevel::class);
 
-        $types = AssetType::query()
-            ->available()
-            ->select('asset_types.id', 'asset_types.name', 'asset_types.min_stock', 'asset_types.asset_category_id')
-            ->selectRaw('coalesce(totals.type_total, 0) as type_total')
-            ->leftJoinSub(self::typeTotals(), 'totals', 'totals.asset_type_id', '=', 'asset_types.id')
-            ->where('asset_types.tracking_mode', TrackingMode::Quantity->value)
-            ->whereNotNull('asset_types.min_stock')
-            ->whereRaw('coalesce(totals.type_total, 0) < asset_types.min_stock')
-            ->with('category:id,name')
-            ->orderBy('asset_types.name')
-            ->orderBy('asset_types.id')
-            ->get();
-
-        return response()->json(['data' => $types->map(fn (AssetType $type) => [
-            'asset_type' => ['id' => $type->id, 'name' => $type->name, 'category' => $type->category->only(['id', 'name'])],
-            'type_total' => (int) $type->type_total,
-            'min_stock' => $type->min_stock,
-        ])->values()]);
-    }
-
-    /**
-     * Existencia total de cada tipo en todas las ubicaciones.
-     */
-    private static function typeTotals(): QueryBuilder
-    {
-        return DB::table('stock_levels')
-            ->select('asset_type_id')
-            ->selectRaw('sum(quantity) as type_total')
-            ->groupBy('asset_type_id');
+        return response()->json(['data' => $alerts->get()]);
     }
 }

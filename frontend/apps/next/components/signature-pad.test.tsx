@@ -66,6 +66,7 @@ type FakePad = InstanceType<typeof FakePad>
 vi.mock('signature_pad', () => ({ default: FakePad }))
 
 const scale = vi.fn()
+const drawImage = vi.fn()
 
 function lastPad(): FakePad {
   const pad = instances.at(-1)
@@ -79,8 +80,9 @@ describe('SignaturePad (RN-024, 007 T007)', () => {
   beforeEach(() => {
     instances.length = 0
     scale.mockReset()
+    drawImage.mockReset()
     width = 400
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ scale } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ scale, drawImage } as unknown as CanvasRenderingContext2D)
     vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(() => width)
     vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => 200)
     Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 })
@@ -124,6 +126,29 @@ describe('SignaturePad (RN-024, 007 T007)', () => {
     expect(ref.current?.isEmpty()).toBe(false)
     expect(ref.current?.toDataURL()).toBe('data:image/png;base64,AAAA')
     expect(screen.getByRole('button', { name: 'Limpiar firma' })).toBeEnabled()
+  })
+
+  it('B-4: si el canvas supera 1000 px de ancho exporta una copia escalada (misma proporción)', () => {
+    width = 600 // 1200 × 400 px reales con devicePixelRatio 2
+    const scaledToDataURL = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,ESCALADA')
+    const onChange = vi.fn()
+    const ref = createRef<SignaturePadHandle>()
+    render(<SignaturePad ref={ref} label="Firma" onChange={onChange} />)
+    const canvas = screen.getByRole('img', { name: 'Firma' }) as HTMLCanvasElement
+
+    act(() => lastPad().stroke())
+
+    expect(onChange).toHaveBeenLastCalledWith('data:image/png;base64,ESCALADA')
+    expect(ref.current?.toDataURL()).toBe('data:image/png;base64,ESCALADA')
+    expect(lastPad().toDataURL).not.toHaveBeenCalled()
+    expect(drawImage).toHaveBeenCalledWith(canvas, 0, 0, 1000, 333)
+    const exported = scaledToDataURL.mock.contexts.at(-1) as HTMLCanvasElement
+    expect(exported).not.toBe(canvas)
+    expect(exported.width).toBe(1000)
+    expect(exported.height).toBe(333)
+    expect(scaledToDataURL).toHaveBeenLastCalledWith('image/png')
   })
 
   it('"Limpiar" borra la firma e informa null', async () => {

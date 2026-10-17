@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Enums\Permission;
 use App\Models\User;
+use App\Reports\Export\ReportResponder;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -92,6 +93,16 @@ class AppServiceProvider extends ServiceProvider
         // abierta.
         RateLimiter::for('password-change', function (Request $request) {
             return Limit::perMinute(6)->by('password-change|'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
+        });
+
+        // 008 (D-002): generar un Excel o un PDF ocupa el proceso varios
+        // segundos (SC-001); se limita por usuario. El JSON no cuenta.
+        RateLimiter::for('report-downloads', function (Request $request) {
+            if (! in_array($request->query('format'), [ReportResponder::FORMAT_XLSX, ReportResponder::FORMAT_PDF], true)) {
+                return Limit::none();
+            }
+
+            return Limit::perMinute(10)->by('report-downloads|'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
         });
     }
 }

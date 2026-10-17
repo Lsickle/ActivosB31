@@ -6,6 +6,7 @@ use App\Enums\AssetEventType;
 use App\Enums\AssetStatus;
 use App\Exceptions\AssetStateException;
 use App\Models\Asset;
+use App\Models\Delivery;
 use App\Models\Employee;
 use App\Models\Location;
 use App\Models\User;
@@ -21,7 +22,9 @@ describe('AssignAsset', function () {
         $bodega = Location::factory()->create();
         $asset = Asset::factory()->at($bodega)->create();
 
-        $result = app(AssignAsset::class)->handle($asset, $employee, $user, deliveryId: 42, notes: 'Dotación');
+        $delivery = Delivery::factory()->create();
+
+        $result = app(AssignAsset::class)->handle($asset, $employee, $user, deliveryId: $delivery->id, notes: 'Dotación');
 
         expect($result->status)->toBe(AssetStatus::Assigned)
             ->and($result->holder_employee_id)->toBe($employee->id)
@@ -38,7 +41,7 @@ describe('AssignAsset', function () {
             ->and($event->from_status)->toBe(AssetStatus::Available)
             ->and($event->to_status)->toBe(AssetStatus::Assigned)
             ->and($event->employee_id)->toBe($employee->id)
-            ->and($event->delivery_id)->toBe(42)
+            ->and($event->delivery_id)->toBe($delivery->id)
             ->and($event->user_id)->toBe($user->id)
             ->and($event->notes)->toBe('Dotación');
     });
@@ -84,7 +87,9 @@ describe('ReleaseAsset', function () {
         $taller = Location::factory()->create();
         $asset = Asset::factory()->at($bodega)->assignedTo($employee)->create();
 
-        app(ReleaseAsset::class)->handle($asset, AssetStatus::Available, $taller, $user, deliveryId: 7, notes: 'Buen estado');
+        $delivery = Delivery::factory()->create();
+
+        app(ReleaseAsset::class)->handle($asset, AssetStatus::Available, $taller, $user, deliveryId: $delivery->id, notes: 'Buen estado');
 
         $fresh = $asset->fresh();
         expect($fresh->status)->toBe(AssetStatus::Available)
@@ -98,7 +103,7 @@ describe('ReleaseAsset', function () {
             ->and($event->from_location_id)->toBe($bodega->id)
             ->and($event->to_location_id)->toBe($taller->id)
             ->and($event->employee_id)->toBe($employee->id)
-            ->and($event->delivery_id)->toBe(7)
+            ->and($event->delivery_id)->toBe($delivery->id)
             ->and($event->notes)->toBe('Buen estado');
     });
 

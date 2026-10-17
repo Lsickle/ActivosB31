@@ -16,4 +16,15 @@ class StockLevelPolicy
     {
         return $user->hasPermission(Permission::InventarioVer);
     }
+
+    /**
+     * Contrato de 007 (permisos cruzados): el asistente de entrega muestra la
+     * existencia del tipo en la ubicación de origen con GET
+     * /api/inventory/stock. No abre el resumen de serializados ni las
+     * alertas de stock mínimo.
+     */
+    public function viewForDelivery(User $user): bool
+    {
+        return $user->hasPermission(Permission::EntregasGestionar);
+    }
 }

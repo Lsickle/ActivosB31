@@ -24,7 +24,7 @@ import { CatalogSelectField } from '@/features/configuracion/CatalogFormDialog'
 import { optionsPlaceholder } from '@/features/configuracion/useConfigurationOptions'
 import { activeLocationItems } from '@/features/inventario/shared'
 import { cn } from '@/lib/utils'
-import { formatQuantity, itemLabel } from './shared'
+import { formatQuantity, itemLabel, NOTES_PRIVACY_HINT } from './shared'
 
 // D-004 / RN-026 / RN-038: qué pasa con lo devuelto según el estado.
 function effectText(serialized: boolean, condition: ReturnCondition): string {
@@ -246,13 +246,18 @@ function ReturnForm({
                       {row.condition !== 'lost' && <span className="font-normal text-muted-foreground">(opcional)</span>}
                     </Label>
                     <textarea
-                      {...fieldA11yProps(`${prefix}-notes`, error('notes'))}
+                      {...fieldA11yProps(`${prefix}-notes`, error('notes'), true)}
                       value={row.notes}
                       maxLength={NOTES_MAX}
                       rows={2}
                       onChange={(event) => update(index, { notes: event.target.value })}
                       className={TEXTAREA_CLASS}
                     />
+                    {!error('notes') && (
+                      <p id={`${prefix}-notes-description`} className="text-xs text-muted-foreground">
+                        {NOTES_PRIVACY_HINT}
+                      </p>
+                    )}
                     {error('notes') && (
                       <p id={`${prefix}-notes-error`} className="text-xs text-destructive">
                         {error('notes')}

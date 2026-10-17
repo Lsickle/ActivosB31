@@ -11,7 +11,11 @@ use App\Http\Controllers\Api\AssetTypeController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ConfigurationOptionsController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DeliveryReturnController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EmployeeHoldingController;
 use App\Http\Controllers\Api\InventoryCountController;
 use App\Http\Controllers\Api\InventoryMovementController;
 use App\Http\Controllers\Api\InventoryStockController;
@@ -20,6 +24,8 @@ use App\Http\Controllers\Api\LocationTypeController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\PositionController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ReportOptionsController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\SecurityEventController;
@@ -148,6 +154,29 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::patch('/inventory/counts/{count}/lines', [InventoryCountController::class, 'updateLines'])->whereNumber('count')->name('inventory.counts.lines.update');
         Route::post('/inventory/counts/{count}/close', [InventoryCountController::class, 'close'])->whereNumber('count')->name('inventory.counts.close');
 
-        // Módulos de negocio (ver docs/modulos.md): entregas y reportes.
+        // Entregas (007, FR-006): inmutables, sin edición ni borrado (FR-001).
+        // /deliveries/alerts va antes de /deliveries/{delivery}.
+        Route::get('/deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
+        Route::get('/deliveries/alerts', [DeliveryController::class, 'alerts'])->name('deliveries.alerts');
+        Route::post('/deliveries', [DeliveryController::class, 'store'])->name('deliveries.store');
+        Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])->whereNumber('delivery')->name('deliveries.show');
+        Route::post('/deliveries/{delivery}/returns', [DeliveryReturnController::class, 'store'])->whereNumber('delivery')->name('deliveries.returns.store');
+        // D-007: tenencias del empleado (empleados.ver).
+        Route::get('/employees/{employee}/holdings', [EmployeeHoldingController::class, 'index'])->whereNumber('employee')->name('employees.holdings.index');
+
+        // Reportes (008, RN-032, RN-033): reportes.ver; format=json|xlsx|pdf.
+        // Las descargas (xlsx/pdf) se limitan por usuario (report-downloads).
+        Route::middleware('throttle:report-downloads')->group(function () {
+            Route::get('/reports/inventory', [ReportController::class, 'inventory'])->name('reports.inventory');
+            Route::get('/reports/employees/{employee}', [ReportController::class, 'employee'])->whereNumber('employee')->name('reports.employee');
+            Route::get('/reports/assets/{asset}', [ReportController::class, 'asset'])->name('reports.asset');
+            Route::get('/reports/asset-types/{assetType}', [ReportController::class, 'assetType'])->whereNumber('assetType')->name('reports.asset-type');
+        });
+        Route::get('/reports/asset-options', [ReportOptionsController::class, 'assets'])->name('reports.asset-options');
+        Route::get('/reports/employee-options', [ReportOptionsController::class, 'employees'])->name('reports.employee-options');
+        Route::get('/reports/asset-type-options', [ReportOptionsController::class, 'assetTypes'])->name('reports.asset-type-options');
+
+        // Tablero de Inicio (008, D-004): solo sesión; secciones por permiso.
+        Route::get('/dashboard', DashboardController::class)->name('dashboard');
     });
 });

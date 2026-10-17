@@ -5,6 +5,7 @@ use App\Enums\MovementType;
 use App\Enums\TrackingMode;
 use App\Models\AssetCategory;
 use App\Models\AssetType;
+use App\Models\Delivery;
 use App\Models\InventoryMovement;
 use App\Models\Location;
 use App\Models\LocationType;
@@ -106,13 +107,15 @@ it('D-002: el ajuste suma con destino y resta con origen', function () {
 it('D-002 / RN-038: entrega, devolución y pérdida (para 007) con delivery_id', function () {
     record(MovementType::Entry, $this->type, 10, to: $this->warehouse);
 
-    record(MovementType::Delivery, $this->type, 3, from: $this->warehouse, deliveryId: 77);
-    record(MovementType::Return, $this->type, 1, to: $this->engine, deliveryId: 77);
-    $loss = record(MovementType::Loss, $this->type, 2, reason: 'Devuelto dañado', deliveryId: 77);
+    $deliveryId = Delivery::factory()->create()->id;
+
+    record(MovementType::Delivery, $this->type, 3, from: $this->warehouse, deliveryId: $deliveryId);
+    record(MovementType::Return, $this->type, 1, to: $this->engine, deliveryId: $deliveryId);
+    $loss = record(MovementType::Loss, $this->type, 2, reason: 'Devuelto dañado', deliveryId: $deliveryId);
 
     expect(StockLevel::quantityOf($this->type, $this->warehouse))->toBe(7)
         ->and(StockLevel::quantityOf($this->type, $this->engine))->toBe(1)
-        ->and($loss->delivery_id)->toBe(77)
+        ->and($loss->delivery_id)->toBe($deliveryId)
         ->and((int) StockLevel::query()->sum('quantity'))->toBe(8);
 });
 
