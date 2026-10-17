@@ -1,0 +1,18 @@
+# Finales de línea LF en el repo y en el árbol de trabajo (el código corre en
+# contenedores Linux y en el CI; evita diffs por CRLF en Windows).
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.cjs  -diff
