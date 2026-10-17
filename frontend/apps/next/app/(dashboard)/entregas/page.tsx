@@ -1,7 +1,8 @@
-import { ModulePlaceholder } from '@/components/module-placeholder'
+import { EntregasScreen } from '@/features/entregas/EntregasScreen'
 
 export const metadata = { title: 'Entregas' }
 
+// spec 007: EntregasScreen exige entregas.ver (FR-006) con useRequireAuth.
 export default function EntregasPage() {
-  return <ModulePlaceholder permission="entregas.ver" title="Entregas" description="Entregas y devoluciones de activos a empleados." />
+  return <EntregasScreen />
 }

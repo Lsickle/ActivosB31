@@ -7240,6 +7240,7 @@ __metadata:
     react-native-web: "npm:~0.19.10"
     recharts: "npm:3.8.0"
     shadcn: "npm:^4.13.0"
+    signature_pad: "npm:5.1.4"
     sonner: "npm:^2.0.7"
     tailwind-merge: "npm:^3.6.0"
     tailwindcss: "npm:^4.3.2"
@@ -8944,6 +8945,13 @@ __metadata:
   version: 4.1.0
   resolution: "signal-exit@npm:4.1.0"
   checksum: 10/c9fa63bbbd7431066174a48ba2dd9986dfd930c3a8b59de9c29d7b6854ec1c12a80d15310869ea5166d413b99f041bfa3dd80a7947bcd44ea8e6eb3ffeabfa1f
+  languageName: node
+  linkType: hard
+
+"signature_pad@npm:5.1.4":
+  version: 5.1.4
+  resolution: "signature_pad@npm:5.1.4"
+  checksum: 10/d5410eff9a78ac5757bcb88f84b08024902536f79aa8b3de8b2ec2da5dac1efbb1f2b60552676699c44eb33e8ae40f2bf1ee600eb1e17a6bc032beea592137a3
   languageName: node
   linkType: hard
 

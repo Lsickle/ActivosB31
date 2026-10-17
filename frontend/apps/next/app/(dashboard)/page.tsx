@@ -1,7 +1,8 @@
-import { ModulePlaceholder } from '@/components/module-placeholder'
+import { InicioScreen } from '@/features/inicio/InicioScreen'
 
 export const metadata = { title: 'Inicio' }
 
+// spec 008 US4 / D-004: tablero con las secciones que el usuario puede ver.
 export default function HomePage() {
-  return <ModulePlaceholder title="Inicio" description="Resumen del inventario de la estación. Pendiente: indicadores del dashboard." />
+  return <InicioScreen />
 }

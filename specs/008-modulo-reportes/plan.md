@@ -22,9 +22,10 @@ Tres reportes consultables en pantalla y exportables (RN-032) a Excel (`maatwebs
 | `GET /api/reports/employees/{id}` | `from, to` |
 | `GET /api/reports/assets/{id}` | `from, to` |
 | `GET /api/reports/asset-types/{id}` | `from, to, location_id` |
+| `GET /api/reports/asset-options` | `search` (placa o serial; para elegir el activo) |
 | `GET /api/dashboard` | — |
 
-Todos aceptan `format=json|xlsx|pdf` (por defecto `json`).
+Los reportes aceptan `format=json|xlsx|pdf` (por defecto `json`). Detalle en [contracts/api.md](contracts/api.md).
 
 ## Frontend
 
@@ -36,6 +37,6 @@ Todos aceptan `format=json|xlsx|pdf` (por defecto `json`).
 - [ ] T002 Tests + clases de reporte (D-001) y endpoints JSON con permisos (D-003)
 - [ ] T003 Tests + exportación Excel y PDF (D-002, D-005)
 - [ ] T004 Tests + `/api/dashboard` (D-004)
-- [ ] T005 Frontend `/reportes` y descarga de archivos (+ tests)
-- [ ] T006 Frontend Inicio con alertas (+ tests)
+- [x] T005 Frontend `/reportes` y descarga de archivos (+ tests). Contrato fijado en [contracts/api.md](contracts/api.md) (incluye `GET /api/reports/asset-options` y `Content-Disposition` en `exposed_headers` de CORS); `apiDownload` en `packages/app/lib/api-client.ts`.
+- [x] T006 Frontend Inicio con alertas (+ tests)
 - [ ] T007 Suites, navegador, `CLAUDE.md`

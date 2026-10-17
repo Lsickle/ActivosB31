@@ -9,9 +9,9 @@
 - [ ] T006 Tests + listado/ficha/estado derivado (D-005), alertas, `holdings` (D-007), permisos (D-006)
 
 ## Frontend
-- [ ] T007 Instalar `signature_pad@5.1.4`; `SignaturePad` (+ test)
-- [ ] T008 `packages/app/features/entregas/{api,schemas}.ts` (+ tests)
-- [ ] T009 `/entregas`: listado, asistente de nueva entrega, ficha, devolución (+ tests); tenencias en la ficha del empleado
+- [x] T007 Instalar `signature_pad@5.1.4`; `SignaturePad` (+ test)
+- [x] T008 `packages/app/features/entregas/{api,schemas}.ts` (+ tests)
+- [x] T009 `/entregas`: listado, asistente de nueva entrega, ficha, devolución (+ tests); tenencias en la ficha del empleado
 
 ## Cierre
 - [ ] T010 Suites, typecheck, Pint · T011 `especialista-seguridad` · T012 Navegador y `CLAUDE.md`
