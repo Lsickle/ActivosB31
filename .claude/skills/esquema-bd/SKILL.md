@@ -32,16 +32,27 @@ personal_access_tokens(id, tokenable_type, tokenable_id, name, token UNIQUE, abi
 cache, cache_locks, jobs, job_batches, failed_jobs
 ```
 
-## Tablas previstas (borrador, NO implementar sin aprobar)
+## Configuración (aprobado por el usuario, 2026-10-17 — pendiente de migrar)
 
-Configuración (requisito explícito del usuario: tipos de activo dependen de categorías, 1:N):
+Catálogos sin `softDeletes`: nunca se borran si tienen datos, solo se desactivan (RN-003). Nombres únicos sin distinguir mayúsculas (índice único sobre `lower(name)`).
 
 ```sql
-asset_categories(id, name UNIQUE, description NULL, is_active, timestamps)
-asset_types(id, asset_category_id FK -> asset_categories, name, description NULL, is_active, timestamps,
-            UNIQUE(asset_category_id, name))
-locations(id, name UNIQUE, description NULL, is_active, timestamps)
+asset_categories(id, name, description NULL, is_active bool DEFAULT true, timestamps,
+                 UNIQUE(lower(name)))                                   -- RN-003
+asset_types(id, asset_category_id FK -> asset_categories, name, description NULL,
+            tracking_mode varchar CHECK IN ('serialized','quantity'),   -- RN-007
+            is_active bool DEFAULT true, timestamps,
+            UNIQUE(asset_category_id, lower(name)))                     -- RN-003
+location_types(id, name, description NULL, is_active bool DEFAULT true, timestamps,
+               UNIQUE(lower(name)))                                     -- RN-004
+locations(id, location_type_id FK -> location_types, name, description NULL,
+          is_active bool DEFAULT true, timestamps, UNIQUE(lower(name))) -- RN-002
 ```
+
+Reglas asociadas:
+- `asset_types.tracking_mode` no se puede cambiar si el tipo ya tiene activos (cuando exista la tabla de activos).
+- Una categoría inactiva oculta sus tipos para registros nuevos (RN-003); no desactiva los tipos en cascada.
+- La periodicidad de mantenimientos/vencimientos (RN-006) se diseña con el módulo de Activos; no está en estas tablas.
 
 RBAC (mismo patrón que EcoLink-Platform, tablas propias sin paquete externo — pendiente de confirmar):
 

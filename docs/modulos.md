@@ -11,13 +11,14 @@ Contexto: aplicación de una sola organización — la Estación de Bomberos de 
 Quién entra al sistema y qué puede hacer.
 
 - CRUD de usuarios del sistema (activar/desactivar, no borrar).
-- Roles con permisos por módulo y acción (`<modulo>.<accion>`, p. ej. `activos.crear`).
+- Roles con permisos por módulo en dos niveles: `<modulo>.ver` y `<modulo>.gestionar` (RN-009).
 - El backend ya tiene login (cookie web / token Bearer), logout, `GET /api/user` y bloqueo de cuentas inactivas. `GET /api/user` devuelve `permissions: []` hasta implementar este módulo.
 
 Preguntas abiertas:
-- ¿Qué roles hay? (p. ej. Administrador, Almacenista/Encargado de inventario, Comandante/Consulta).
-- ¿Un usuario del sistema es siempre un empleado? ¿Los empleados sin usuario solo reciben entregas?
-- Política de contraseñas, bloqueo por intentos fallidos y recuperación de contraseña por correo.
+- ~~¿Qué roles hay?~~ → Precargados **Administrador, Almacenista y Consulta**; se pueden crear más desde la matriz (RN-010, 2026-10-17).
+- ~~Granularidad de permisos~~ → **Ver / Gestionar** por módulo, administrados en una **matriz rol × módulo** (RN-009, 2026-10-17).
+- ~~¿Usuario = empleado?~~ → Independientes por ahora; vínculo **opcional** usuario → empleado cuando exista Empleados (RN-015, 2026-10-17).
+- ~~Contraseñas~~ → **temporal asignada por el admin + cambio obligatorio** al primer ingreso; recuperación por correo más adelante (RN-014, 2026-10-17). Pendiente: bloqueo por intentos fallidos.
 
 ## 2. Activos
 
@@ -99,3 +100,10 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-006** — El sistema controla **mantenimientos y vencimientos** desde el alcance inicial (p. ej. prueba hidrostática, vencimiento de EPP), con alertas de próximos a vencer. (usuario, 2026-10-17)
 - **RN-007** — La naturaleza de control (**serializado** o **por cantidad**) la define el **tipo de activo**; todos los artículos de un tipo siguen esa regla. (usuario, 2026-10-17)
 - **RN-008** — En los activos serializados la **placa de inventario es obligatoria y única**; el **serial del fabricante es opcional**. Los artículos por cantidad no llevan placa ni serial. (usuario, 2026-10-17)
+- **RN-009** — Los permisos se definen **por módulo en dos niveles**: **ver** (consultar) y **gestionar** (crear, editar, desactivar). Se administran desde una **matriz rol × módulo** en la aplicación. (usuario, 2026-10-17)
+- **RN-010** — Roles precargados: **Administrador** (todos los permisos, incluida la matriz; sus permisos no se pueden quitar), **Almacenista** (gestiona activos, inventario y entregas; ve configuración y usuarios) y **Consulta** (solo ver). Sus permisos iniciales se ajustan luego desde la matriz, salvo los del Administrador. (usuario, 2026-10-17)
+- **RN-011** — Los catálogos de Configuración los **consulta cualquier rol**; **solo el Administrador los modifica** (permiso inicial de la matriz). (usuario, 2026-10-17)
+- **RN-012** — Los catálogos de Configuración se **precargan** con categorías, tipos de activo y tipos de ubicación iniciales; la lista exacta se confirma con el usuario. (usuario, 2026-10-17)
+- **RN-013** — Cada usuario tiene **exactamente un rol**. (usuario, 2026-10-17)
+- **RN-014** — El Administrador asigna una **contraseña temporal** al crear un usuario o al restablecerla; el usuario **debe cambiarla** en su siguiente ingreso. La recuperación por correo queda para cuando se defina el servicio de correo. (usuario, 2026-10-17)
+- **RN-015** — Usuarios y empleados son independientes en esta etapa; cuando exista el módulo Empleados se agrega un **vínculo opcional** usuario → empleado. (usuario, 2026-10-17)
