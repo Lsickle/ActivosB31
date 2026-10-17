@@ -102,4 +102,95 @@ Reglas asociadas:
 
 RBAC: ver la sección "RBAC (feature 001-rbac)" en Tablas existentes.
 
-Activos, empleados, entregas e inventario: pendientes de las preguntas abiertas de `docs/modulos.md`.
+## PROPUESTA — pendiente de aprobación del usuario (2026-10-17)
+
+> No migrar nada de esta sección hasta que el usuario la apruebe. Al aprobarse, cada bloque pasa a "migrado" con su feature.
+
+### 003 — Seguridad: bitácora y bloqueo (A-1, RN-034)
+
+```sql
+users + failed_login_attempts smallint DEFAULT 0, locked_until timestamptz NULL   -- RN-034: 5 fallos seguidos → 15 min
+security_events(id, event varchar(50),          -- login_succeeded, login_failed, account_locked, account_unlocked, logout,
+                                                -- user_created, user_updated, user_status_changed, password_reset, password_changed,
+                                                -- role_created, role_updated, role_status_changed, role_permissions_updated
+                actor_id FK -> users NULL,      -- quién lo hizo (NULL en login fallido de cuenta inexistente)
+                target_user_id FK -> users NULL, target_role_id FK -> roles NULL,
+                login_attempted varchar(255) NULL,  -- texto ingresado en login fallido
+                ip_address varchar(45) NULL, user_agent varchar(255) NULL,
+                metadata jsonb NULL,            -- p. ej. {from_role, to_role}, permisos agregados/quitados
+                created_at timestamptz idx)     -- SOLO INSERCIÓN: trigger que rechaza UPDATE/DELETE
+```
+
+### 004 — Empleados (RN-021, RN-022, RN-015)
+
+```sql
+positions(id, name varchar(120), description varchar(500) NULL, is_active, timestamps, UNIQUE(lower(name)))   -- cargos/rangos (Configuración)
+companies(id, name varchar(120), description NULL, is_active, timestamps, UNIQUE(lower(name)))               -- compañías/turnos (Configuración)
+employees(id, document_type varchar(5) CHECK IN ('CC','CE','TI','PA','PPT'), document_number varchar(20),
+          first_name varchar(80), last_name varchar(80),
+          position_id FK -> positions RESTRICT, company_id FK -> companies NULL RESTRICT,
+          phone varchar(30) NULL, email varchar(255) NULL, hire_date date NULL,
+          shirt_size varchar(10) NULL, pants_size varchar(10) NULL, boot_size varchar(10) NULL, glove_size varchar(10) NULL,
+          is_active bool DEFAULT true, timestamps,
+          UNIQUE(document_type, document_number))      -- no se borran: se desactivan
+users + employee_id FK -> employees NULL UNIQUE     -- vínculo opcional (RN-015)
+```
+
+### 005 — Activos, mantenimientos y vencimientos (RN-001, RN-005..RN-008, RN-029..RN-031)
+
+```sql
+assets(id, asset_type_id FK -> asset_types RESTRICT,   -- solo tipos 'serialized' (RN-007)
+       plate varchar(50), serial varchar(100) NULL,    -- RN-008: placa obligatoria y única (lower)
+       brand varchar(80) NULL, model varchar(80) NULL,
+       acquisition_date date NULL, acquisition_value numeric(14,2) NULL, useful_life_months smallint NULL,
+       expires_on date NULL,                           -- RN-031
+       status varchar(20) CHECK IN ('available','assigned','maintenance','retired') DEFAULT 'available',  -- RN-005
+       location_id FK -> locations NULL,               -- dónde está (bodega, vehículo…)
+       holder_employee_id FK -> employees NULL,        -- quién lo tiene (lo fija Entregas)
+       photo_path varchar(255) NULL,                   -- R2
+       notes text NULL, timestamps,
+       UNIQUE(lower(plate)))
+asset_events(id, asset_id FK, event varchar(30),       -- created, updated, status_changed, location_changed, delivered,
+                                                       -- returned, maintenance_done, retired  (historial, SOLO INSERCIÓN)
+             from_status NULL, to_status NULL, from_location_id NULL, to_location_id NULL,
+             employee_id NULL, delivery_id NULL, user_id FK -> users, notes text NULL, created_at)
+asset_maintenance_plans(id, asset_id FK, name varchar(120),          -- RN-029: por activo ("Prueba hidrostática")
+                        interval_months smallint, last_done_on date NULL, next_due_on date,
+                        alert_days smallint DEFAULT 30,              -- RN-030
+                        is_active, timestamps)
+asset_maintenance_records(id, asset_id FK, plan_id FK NULL, performed_on date, description varchar(500),
+                          performed_by varchar(120) NULL, cost numeric(14,2) NULL, user_id, created_at)   -- SOLO INSERCIÓN
+app_settings(key varchar(80) PK, value jsonb, updated_at)            -- expiry_alert_days = 30 (RN-030)
+asset_types + min_stock integer NULL                                 -- RN-028, solo tipos 'quantity'
+```
+
+### 006 — Inventario (RN-027, RN-028) — artículos por cantidad
+
+```sql
+stock_levels(asset_type_id FK, location_id FK, quantity integer CHECK >= 0, updated_at, PK(asset_type_id, location_id))
+inventory_movements(id, type varchar(20) CHECK IN ('entry','exit','transfer','adjustment','delivery','return','loss'),
+                    asset_type_id FK, quantity integer CHECK > 0,
+                    from_location_id NULL, to_location_id NULL,
+                    delivery_id NULL, count_id NULL, reason varchar(500) NULL, user_id, created_at)   -- SOLO INSERCIÓN
+inventory_counts(id, location_id FK, status CHECK IN ('open','closed'), notes NULL,
+                 opened_by FK users, closed_by FK users NULL, opened_at, closed_at NULL)
+inventory_count_lines(id, count_id FK, asset_type_id NULL, asset_id NULL,   -- cantidad: esperado/contado; serializado: encontrado
+                      expected_quantity integer NULL, counted_quantity integer NULL, found bool NULL)
+```
+
+### 007 — Entregas (RN-023..RN-026)
+
+```sql
+deliveries(id, code varchar(20) UNIQUE,                 -- consecutivo ENT-000001
+           employee_id FK RESTRICT, kind CHECK IN ('dotacion','prestamo'),   -- RN-023
+           due_on date NULL,                            -- obligatoria si es préstamo
+           from_location_id FK -> locations,            -- de dónde salen los artículos por cantidad
+           signature_path varchar(255),                 -- RN-024, imagen en R2
+           notes text NULL, delivered_by FK users, delivered_at timestamptz, created_at)   -- no se edita
+delivery_items(id, delivery_id FK, asset_id FK NULL,    -- serializado
+               asset_type_id FK, quantity integer CHECK > 0, returned_quantity integer DEFAULT 0)
+delivery_returns(id, delivery_item_id FK, quantity integer CHECK > 0,
+                 condition CHECK IN ('good','damaged','lost'),   -- RN-026
+                 to_location_id FK NULL, notes NULL, received_by FK users, returned_at, created_at)
+```
+
