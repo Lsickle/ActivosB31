@@ -31,7 +31,7 @@ Preguntas abiertas:
 - ~~¿Serializados o por cantidad?~~ → **Ambos** (RN-001, 2026-10-17).
 - Campos del activo serializado: confirmados **marca, modelo, fecha de adquisición, valor (vida útil opcional) y foto** (2026-10-17). Placa y serial **solo aplican a los serializados**; los artículos por cantidad (guantes, etc.) no los llevan (usuario, 2026-10-17). La naturaleza la define el **tipo de activo** (RN-007) y en los serializados la placa es obligatoria y única, el serial opcional (RN-008). La foto depende de decidir el almacenamiento de archivos.
 - ~~Estados del activo~~ → **Disponible, Asignado, En mantenimiento, Dado de baja** (RN-005, 2026-10-17).
-- ~~¿Mantenimientos o vencimientos?~~ → **Sí, desde el alcance inicial**, con alertas (RN-006, 2026-10-17). Pendiente detallar: qué se programa (por tipo de activo o por activo), periodicidad y anticipación de la alerta.
+- ~~¿Mantenimientos o vencimientos?~~ → **Sí, desde el alcance inicial**, con alertas (RN-006, 2026-10-17). Detallado: se programa **por activo individual** (RN-029), anticipación de alerta **configurable, 30 días por defecto** (RN-030) y **fecha de vencimiento opcional** en el activo serializado (RN-031) (2026-10-17).
 
 ## 3. Empleados
 
@@ -40,18 +40,18 @@ Personal al que se le asignan activos.
 - CRUD de empleados (desactivar, no borrar: conservan su historial de entregas).
 
 Preguntas abiertas:
-- Campos: ¿documento, nombre, cargo/rango, turno o compañía, teléfono, correo, tallas de EPP?
-- Datos personales bajo Ley 1581 de 2012: ¿quién puede verlos?
+- ~~Campos~~ → documento (tipo y número, único), nombres, apellidos, cargo/rango (catálogo administrable), compañía/turno, teléfono, correo, fecha de ingreso y tallas de dotación (RN-021, 2026-10-17).
+- ~~Datos personales (Ley 1581)~~ → los ve solo quien tenga `empleados.ver` (RN-022, 2026-10-17).
 
 ## 4. Entregas
 
 Entrega (y devolución) de activos a empleados.
 
 Preguntas abiertas:
-- ¿Una entrega es un **préstamo con devolución** esperada, una **asignación permanente** (dotación), o ambas?
-- ¿Se requiere acta o firma del empleado que recibe (en pantalla, PDF imprimible)?
-- ¿Una entrega puede incluir varios activos a la vez?
-- ¿Qué pasa si se devuelve dañado o no se devuelve?
+- ~~¿Préstamo o dotación?~~ → **Ambas** (RN-023, 2026-10-17).
+- ~~¿Acta o firma?~~ → **Firma en pantalla** del empleado que recibe (RN-024, 2026-10-17).
+- ~~¿Varios activos?~~ → **Sí**, serializados y por cantidad en la misma entrega (RN-025, 2026-10-17).
+- ~~¿Devuelto dañado o no devuelto?~~ → estado al devolver: bueno / dañado / perdido; préstamos vencidos con alerta (RN-026, 2026-10-17).
 
 ## 5. Inventario
 
@@ -61,8 +61,8 @@ Existencias y movimientos.
 - Movimientos de entrada, salida, traslado entre ubicaciones y ajuste; los movimientos no se editan ni borran (se corrigen con un movimiento inverso).
 
 Preguntas abiertas:
-- ¿Se hacen conteos físicos periódicos y se concilian contra el sistema?
-- ¿Hay stock mínimo con alerta?
+- ~~¿Conteos físicos?~~ → **Sí, por ubicación**; las diferencias se registran como ajustes (RN-027, 2026-10-17).
+- ~~¿Stock mínimo?~~ → **Por tipo de artículo de cantidad**, con alerta (RN-028, 2026-10-17).
 
 ## 6. Reportes
 
@@ -71,8 +71,8 @@ Preguntas abiertas:
 - **Inventario general**: existencias por categoría, tipo, ubicación y estado.
 
 Preguntas abiertas:
-- Formatos de exportación: ¿PDF, Excel o ambos?
-- ¿Filtros por rango de fechas?
+- ~~Formatos~~ → **Excel y PDF** (RN-032, 2026-10-17).
+- ~~¿Rango de fechas?~~ → **Sí** (RN-033, 2026-10-17).
 
 ## 7. Configuración
 
@@ -112,6 +112,23 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-018** — Un usuario **no puede restablecer su propia contraseña** desde la gestión de usuarios; debe usar "Cambiar contraseña" (con su contraseña actual). (usuario, 2026-10-17)
 - **RN-019** — El permiso **gestionar Usuarios y roles** (usuarios, roles, matriz y contraseñas de otros) es **exclusivo del rol Administrador**: no se puede conceder a otros roles desde la matriz. (usuario, 2026-10-17, a partir del hallazgo H-1 de la revisión de seguridad)
 - **RN-020** — Los roles precargados (Administrador, Almacenista, Consulta) **no se pueden renombrar**; solo se edita su descripción. (usuario, 2026-10-17)
+
+- **RN-021** — Datos del empleado: documento (tipo y número, **único**), nombres, apellidos, cargo/rango (catálogo administrable), compañía o turno, teléfono, correo, fecha de ingreso y **tallas de dotación** (camisa, pantalón, botas, guantes). Los empleados no se borran, se desactivan. (usuario, 2026-10-17)
+- **RN-022** — Los datos personales de los empleados (Ley 1581 de 2012) los ve **solo quien tenga `empleados.ver`**; inicialmente Administrador y Almacenista. (usuario, 2026-10-17)
+- **RN-023** — Una entrega puede ser **dotación** (asignación permanente) o **préstamo** con fecha de devolución esperada. (usuario, 2026-10-17)
+- **RN-024** — Toda entrega lleva la **firma en pantalla** del empleado que recibe. (usuario, 2026-10-17)
+- **RN-025** — Una entrega puede incluir **varios artículos**, serializados y por cantidad. (usuario, 2026-10-17)
+- **RN-026** — Al devolver se registra el estado: **bueno** (vuelve a Disponible), **dañado** (pasa a En mantenimiento) o **perdido** (se da de baja con observación). Los préstamos vencidos generan **alerta**. (usuario, 2026-10-17)
+- **RN-027** — Se hacen **conteos físicos por ubicación**; las diferencias se registran como **movimientos de ajuste**. (usuario, 2026-10-17)
+- **RN-028** — **Stock mínimo por tipo de artículo** controlado por cantidad, con alerta cuando las existencias totales quedan por debajo. (usuario, 2026-10-17)
+- **RN-029** — Los mantenimientos se programan **por activo individual** (tipo de mantenimiento, periodicidad y fecha del último realizado; el sistema calcula el siguiente). (usuario, 2026-10-17)
+- **RN-030** — La **anticipación de las alertas** de mantenimiento y vencimiento es **configurable, 30 días por defecto**. (usuario, 2026-10-17)
+- **RN-031** — Los activos serializados tienen **fecha de vencimiento opcional** (vida útil), con la misma alerta. (usuario, 2026-10-17)
+- **RN-032** — Los reportes se exportan en **Excel y PDF**. (usuario, 2026-10-17)
+- **RN-033** — Los reportes admiten **filtro por rango de fechas**. (usuario, 2026-10-17)
+- **RN-034** — **Bloqueo de cuenta**: 5 intentos fallidos seguidos bloquean la cuenta 15 minutos; el Administrador puede desbloquearla. (usuario, 2026-10-17)
+
+Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `stack-advisor` antes de fijar): archivos (fotos, firmas) en **Cloudflare R2**; base de datos de producción en **Neon**.
 
 Riesgos aceptados por el usuario (2026-10-17): Almacenista y Consulta conservan `usuarios.ver` con los datos completos de las cuentas (hallazgo M-4, Ley 1581); se puede retirar desde la matriz. La bitácora de seguridad (A-1) se hará como feature aparte **antes de cargar datos reales**, junto con el bloqueo por intentos fallidos.
 
