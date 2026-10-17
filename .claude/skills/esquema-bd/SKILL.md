@@ -5,7 +5,7 @@ description: Esquema de la base de datos de ActivosB31 (PostgreSQL 17) en format
 
 # Esquema de base de datos — ActivosB31
 
-> **Estado**: migradas las tablas base y las de RBAC (001-rbac). Configuración está aprobada y pendiente de migrar; el resto de módulos está **pendiente de diseño** (ver `docs/modulos.md` y sus preguntas abiertas). Cada diseño se documenta aquí ANTES de escribir las migraciones, y el usuario lo aprueba.
+> **Estado**: migradas las tablas base, las de RBAC (001-rbac) y las de Configuración (002-modulo-configuracion); el resto de módulos está **pendiente de diseño** (ver `docs/modulos.md` y sus preguntas abiertas). Cada diseño se documenta aquí ANTES de escribir las migraciones, y el usuario lo aprueba.
 
 ## Convenciones
 
@@ -68,26 +68,36 @@ Reglas asociadas:
 - Siempre debe existir al menos un usuario activo con rol `admin` (FR-012); un rol con usuarios activos no se desactiva (FR-013).
 - Al desactivar un usuario, restablecer o cambiar su contraseña se borran sus filas de `sessions` y `personal_access_tokens` (FR-011).
 
-## Configuración (aprobado por el usuario, 2026-10-17 — pendiente de migrar)
+## Configuración (feature 002-modulo-configuracion, migrado 2026-10-17)
 
-Catálogos sin `softDeletes`: nunca se borran si tienen datos, solo se desactivan (RN-003). Nombres únicos sin distinguir mayúsculas (índice único sobre `lower(name)`).
+Catálogos sin `softDeletes`: nunca se borran, solo se desactivan (RN-003); las FK son `RESTRICT` (D-010). Nombres únicos sin distinguir mayúsculas, incluidos los inactivos (FR-006). Longitudes: `name varchar(120)`, `description varchar(500)`.
 
 ```sql
-asset_categories(id, name, description NULL, is_active bool DEFAULT true, timestamps,
-                 UNIQUE(lower(name)))                                   -- RN-003
-asset_types(id, asset_category_id FK -> asset_categories, name, description NULL,
-            tracking_mode varchar CHECK IN ('serialized','quantity'),   -- RN-007
+-- 2026_10_17_300000_create_asset_categories_table
+asset_categories(id, name varchar(120), description varchar(500) NULL,
+                 is_active bool DEFAULT true, timestamps,
+                 UNIQUE(lower(name)))                         -- asset_categories_name_lower_unique
+-- 2026_10_17_300001_create_asset_types_table
+asset_types(id, asset_category_id FK -> asset_categories RESTRICT NOT NULL idx,
+            name varchar(120), description varchar(500) NULL,
+            tracking_mode varchar(20) CHECK IN ('serialized','quantity'),   -- RN-007 (App\Enums\TrackingMode)
             is_active bool DEFAULT true, timestamps,
-            UNIQUE(asset_category_id, lower(name)))                     -- RN-003
-location_types(id, name, description NULL, is_active bool DEFAULT true, timestamps,
-               UNIQUE(lower(name)))                                     -- RN-004
-locations(id, location_type_id FK -> location_types, name, description NULL,
-          is_active bool DEFAULT true, timestamps, UNIQUE(lower(name))) -- RN-002
+            UNIQUE(asset_category_id, lower(name)))           -- asset_types_category_name_lower_unique
+-- 2026_10_17_300002_create_location_types_table
+location_types(id, name varchar(120), description varchar(500) NULL,
+               is_active bool DEFAULT true, timestamps,
+               UNIQUE(lower(name)))                           -- location_types_name_lower_unique (RN-004)
+-- 2026_10_17_300003_create_locations_table
+locations(id, location_type_id FK -> location_types RESTRICT NOT NULL idx,
+          name varchar(120), description varchar(500) NULL,
+          is_active bool DEFAULT true, timestamps,
+          UNIQUE(lower(name)))                                -- locations_name_lower_unique (RN-002: sin parent_id)
 ```
 
 Reglas asociadas:
-- `asset_types.tracking_mode` no se puede cambiar si el tipo ya tiene activos (cuando exista la tabla de activos).
-- Una categoría inactiva oculta sus tipos para registros nuevos (RN-003); no desactiva los tipos en cascada.
+- `asset_types.tracking_mode` no se puede cambiar si el tipo ya tiene activos (FR-009; `AssetType::hasAssets()` devuelve `false` hasta que exista la tabla de activos).
+- Una categoría inactiva oculta sus tipos para registros nuevos (RN-003, scope `AssetType::available()`); no desactiva los tipos en cascada. Igual con tipos de ubicación inactivos y sus ubicaciones (`Location::available()`).
+- Precarga (RN-012, `ConfigurationSeeder`): categorías + tipos solo si `asset_categories` está vacía; tipos de ubicación solo si `location_types` está vacía (D-008). No se precargan ubicaciones.
 - La periodicidad de mantenimientos/vencimientos (RN-006) se diseña con el módulo de Activos; no está en estas tablas.
 
 RBAC: ver la sección "RBAC (feature 001-rbac)" en Tablas existentes.

@@ -109,15 +109,14 @@ Construido y probado:
 - **Frontend**: pantalla de login, layout autenticado con sidebar de los 7 módulos (placeholders) y cierre de sesión.
 - **Feature 001-rbac** (`specs/001-rbac/`, RN-009..RN-020): roles (Administrador, Almacenista, Consulta precargados; un rol por usuario en `users.role_id`), 13 permisos `<modulo>.ver|gestionar` en `App\Enums\Permission`, matriz rol × módulo, gestión de usuarios y roles (sin borrado), contraseña temporal con cambio obligatorio (middleware `password.changed`), revocación de sesiones/tokens, sidebar y acciones filtradas por permisos (`useCan`, "Acceso denegado"). `usuarios.gestionar` es exclusivo del Administrador (RN-019); no hay `Gate::before`. 124 tests Pest y 96 Vitest en verde; quickstart verificado en navegador (Playwright).
 - Repo en GitHub: `Lsickle/ActivosB31` (público), CI en verde. Identidad git local del repo: `LSickle`.
-- Spec 002 (Configuración) escrita y con datos iniciales confirmados; falta plan, tareas e implementación.
+- **Feature 002-modulo-configuracion** (`specs/002-modulo-configuracion/`, RN-002..RN-004, RN-007, RN-011, RN-012): categorías, tipos de activo (modo serializado/por cantidad), tipos de ubicación y ubicaciones; CRUD sin borrado, búsqueda sin tildes, opciones disponibles en `GET /api/configuracion/options`, precarga (9 categorías, 34 tipos, 4 tipos de ubicación) solo si la tabla está vacía. 211 tests Pest y 145 Vitest en verde; quickstart verificado en navegador.
+- Reglas RN-021..RN-034 confirmadas (empleados, entregas, inventario, mantenimientos, reportes, bloqueo de cuenta) e infraestructura elegida: Cloudflare R2 para archivos y Neon para PostgreSQL de producción (verificar con `stack-advisor` antes de fijar).
 
 Siguiente paso sugerido:
-1. `/speckit-plan` → `/speckit-tasks` → implementar **002-modulo-configuracion** (`specs/002-modulo-configuracion/`), protegida con `configuracion.ver` / `configuracion.gestionar`.
-2. Feature de seguridad antes de datos reales: bitácora de seguridad (A-1) + bloqueo por intentos fallidos.
-3. Resolver preguntas abiertas de Empleados, Entregas e Inventario (`docs/modulos.md`); luego Activos (incluye mantenimientos RN-006), Inventario, Entregas y Reportes.
-4. Primer despliegue en Render y Vercel.
+1. Feature de seguridad antes de datos reales: bitácora de seguridad (A-1) + bloqueo por intentos fallidos (RN-034).
+2. Empleados (RN-021, RN-022), Activos (RN-001, RN-005..RN-008, RN-029..RN-031), Inventario (RN-027, RN-028), Entregas (RN-023..RN-026) y Reportes (RN-032, RN-033).
+3. Primer despliegue en Render y Vercel.
 
-Detalles conocidos: la matriz con 4+ roles desborda en horizontal la página en pantallas angostas (debería desplazarse dentro de la tabla); no hay `favicon.ico`.
 
 ---
 

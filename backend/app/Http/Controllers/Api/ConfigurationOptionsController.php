@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\AssetCategory;
+use App\Models\AssetType;
+use App\Models\Location;
+use App\Models\LocationType;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
+
+/**
+ * Opciones disponibles de Configuración para formularios y otros módulos
+ * (FR-010, D-005): solo registros activos y, en tipos de activo y
+ * ubicaciones, solo los de un padre activo (FR-008, SC-005). Sin paginar.
+ *
+ * D-005 (pendiente con Activos): hoy exige configuracion.ver (RN-011).
+ */
+class ConfigurationOptionsController extends Controller
+{
+    public function __invoke(): JsonResponse
+    {
+        Gate::authorize('viewAny', AssetCategory::class);
+
+        return response()->json(['data' => [
+            'asset_categories' => AssetCategory::query()->active()->orderBy('name')->orderBy('id')->get(['id', 'name']),
+            'asset_types' => AssetType::query()
+                ->available()
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name', 'asset_category_id', 'tracking_mode']),
+            'location_types' => LocationType::query()->active()->orderBy('name')->orderBy('id')->get(['id', 'name']),
+            'locations' => Location::query()
+                ->available()
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name', 'location_type_id']),
+        ]]);
+    }
+}

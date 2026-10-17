@@ -42,10 +42,12 @@ return [
     'unique' => 'El valor del campo :attribute ya está en uso.',
 
     'attributes' => [
+        'asset_category_id' => 'categoría',
         'current_password' => 'contraseña actual',
         'description' => 'descripción',
         'email' => 'correo',
         'is_active' => 'estado',
+        'location_type_id' => 'tipo de ubicación',
         'name' => 'nombre',
         'password' => 'contraseña',
         'per_page' => 'registros por página',
@@ -53,6 +55,7 @@ return [
         'permissions.*' => 'permiso',
         'role_id' => 'rol',
         'search' => 'búsqueda',
+        'tracking_mode' => 'modo de control',
         'username' => 'nombre de usuario',
     ],
 ];

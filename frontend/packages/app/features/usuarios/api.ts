@@ -1,4 +1,5 @@
 import { apiFetch } from '../../lib/api-client'
+import { jsonBody as json, query, type Paginated } from '../../lib/api-helpers'
 import type { NewPasswordValues } from '../auth/schemas'
 import type { PermissionAction } from './permissions'
 import type { RoleFormValues, UserCreateValues, UserUpdateValues } from './schemas'
@@ -36,34 +37,10 @@ export type PermissionModule = {
   permissions: { code: string; action: PermissionAction }[]
 }
 
-export type PaginationMeta = {
-  current_page: number
-  last_page: number
-  per_page: number
-  total: number
-  from: number | null
-  to: number | null
-}
-
-export type Paginated<T> = { data: T[]; meta: PaginationMeta }
+export type { Paginated, PaginationMeta } from '../../lib/api-helpers'
 
 // Rol precargado que siempre tiene todos los permisos (RN-010).
 export const ADMIN_ROLE_CODE = 'admin'
-
-// Laravel valida `boolean` con 1/0: no acepta "true"/"false" en query string.
-function query(params: Record<string, string | number | boolean | undefined | null>): string {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue
-    search.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value))
-  }
-  const result = search.toString()
-  return result ? `?${result}` : ''
-}
-
-function json(method: string, body: unknown): RequestInit {
-  return { method, body: JSON.stringify(body) }
-}
 
 // ---- Usuarios ----
 

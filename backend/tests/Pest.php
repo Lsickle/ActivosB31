@@ -6,6 +6,7 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /*
@@ -72,4 +73,14 @@ function actingWithPermissions(array $codes, array $attributes = []): User
     test()->actingAs($user);
 
     return $user;
+}
+
+/**
+ * PostgreSQL aborta la transacción del test tras una violación de
+ * restricción; un savepoint (transacción anidada) permite seguir consultando
+ * después del error esperado.
+ */
+function inSavepoint(Closure $callback): mixed
+{
+    return DB::transaction($callback);
 }
