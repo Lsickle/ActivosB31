@@ -1,0 +1,26 @@
+{
+  "name": "activosb31",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "eslint": "^9.39.5",
+    "turbo": "^2.4.4",
+    "typescript": "^5.2.2"
+  },
+  "scripts": {
+    "dev": "yarn workspace next-app dev",
+    "test": "yarn workspace next-app test",
+    "typecheck": "yarn workspace next-app tsc --noEmit"
+  },
+  "packageManager": "yarn@4.7.0",
+  "prettier": {
+    "semi": false,
+    "useTabs": false,
+    "tabWidth": 2,
+    "singleQuote": true
+  }
+}

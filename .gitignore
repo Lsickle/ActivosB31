@@ -1,0 +1,11 @@
+# Configuración local de Claude Code (permisos por máquina)
+.claude/settings.local.json
+
+# Artefactos de herramientas de navegador (Playwright MCP)
+.playwright-mcp/
+
+# Si el ZIP de v0 trae dependencias instaladas, no versionarlas
+docs/prototipo-v0/**/node_modules/
+docs/prototipo-v0/**/.next/
+
+nul
