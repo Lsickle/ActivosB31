@@ -9,7 +9,8 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Edición de datos y rol (RN-013). La contraseña se restablece aparte.
+ * Edición de datos, rol (RN-013) y empleado vinculado (RN-015). La contraseña
+ * se restablece aparte.
  */
 class UpdateUserRequest extends FormRequest
 {
@@ -17,7 +18,26 @@ class UpdateUserRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()->can('update', $this->route('user'));
+        /** @var User $user */
+        $user = $this->route('user');
+
+        return $this->user()->can('update', $user)
+            && (! $this->changesEmployee($user) || $this->user()->can('linkEmployee', User::class));
+    }
+
+    /**
+     * RN-015: cambiar o quitar el vínculo exige empleados.ver; reenviar el
+     * mismo empleado (o no enviarlo) no.
+     */
+    private function changesEmployee(User $user): bool
+    {
+        if (! $this->exists('employee_id')) {
+            return false;
+        }
+
+        $requested = $this->input('employee_id');
+
+        return (string) ($requested ?? '') !== (string) ($user->employee_id ?? '');
     }
 
     /**
@@ -40,6 +60,15 @@ class UpdateUserRequest extends FormRequest
                 Rule::exists('roles', 'id')->where(
                     fn ($query) => $query->where('is_active', true)->orWhere('id', $user->role_id),
                 ),
+            ],
+            // RN-015: empleado activo y libre; puede conservar el actual
+            // aunque esté inactivo. null desvincula.
+            'employee_id' => [
+                'sometimes', 'nullable', 'integer',
+                Rule::exists('employees', 'id')->where(
+                    fn ($query) => $query->where('is_active', true)->orWhere('id', $user->employee_id),
+                ),
+                Rule::unique('users', 'employee_id')->ignore($user->id),
             ],
         ];
     }

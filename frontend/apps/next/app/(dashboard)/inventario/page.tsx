@@ -1,7 +1,8 @@
-import { ModulePlaceholder } from '@/components/module-placeholder'
+import { InventarioScreen } from '@/features/inventario/InventarioScreen'
 
 export const metadata = { title: 'Inventario' }
 
+// spec 006: InventarioScreen exige inventario.ver (FR-006) con useRequireAuth.
 export default function InventarioPage() {
-  return <ModulePlaceholder permission="inventario.ver" title="Inventario" description="Existencias por ubicación, movimientos y conteos." />
+  return <InventarioScreen />
 }

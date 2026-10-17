@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\RecordSecurityEvent;
+use App\Enums\SecurityEventType;
 use App\Http\Controllers\Concerns\TranslatesUniqueViolations;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ListRolesRequest;
@@ -17,7 +19,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * Roles (RN-010, FR-013). No se borran: se desactivan. La autorización la
- * hace cada Form Request contra RolePolicy.
+ * hace cada Form Request contra RolePolicy. Cada cambio registra su evento de
+ * bitácora en la misma transacción (A-1, FR-009).
  */
 class RoleController extends Controller
 {
@@ -50,12 +53,18 @@ class RoleController extends Controller
     /**
      * El rol nace sin permisos; se asignan desde la matriz.
      */
-    public function store(StoreRoleRequest $request): JsonResponse
+    public function store(StoreRoleRequest $request, RecordSecurityEvent $recordEvent): JsonResponse
     {
-        $role = $this->translatingUniqueViolations(
-            fn () => Role::query()->create($request->validated()),
-            self::UNIQUE_CONSTRAINTS,
-        );
+        $role = $this->translatingUniqueViolations(fn () => DB::transaction(function () use ($request, $recordEvent) {
+            $role = Role::query()->create($request->validated());
+
+            $recordEvent->handle(SecurityEventType::RoleCreated, $request->user(), role: $role, metadata: [
+                'name' => $role->name,
+                'description' => $role->description,
+            ]);
+
+            return $role;
+        }), self::UNIQUE_CONSTRAINTS);
 
         return $this->resource($role)->response()->setStatusCode(201);
     }
@@ -64,9 +73,22 @@ class RoleController extends Controller
      * RN-020: en los roles precargados solo cambia la descripción (lo valida
      * UpdateRoleRequest).
      */
-    public function update(UpdateRoleRequest $request, Role $role): RoleResource
+    public function update(UpdateRoleRequest $request, Role $role, RecordSecurityEvent $recordEvent): RoleResource
     {
-        $this->translatingUniqueViolations(fn () => $role->update($request->validated()), self::UNIQUE_CONSTRAINTS);
+        $this->translatingUniqueViolations(fn () => DB::transaction(function () use ($request, $role, $recordEvent) {
+            $role->fill($request->validated());
+
+            $changes = [];
+            foreach (array_keys($role->getDirty()) as $field) {
+                $changes[$field] = [$role->getOriginal($field), $role->getAttribute($field)];
+            }
+
+            $role->save();
+
+            if ($changes !== []) {
+                $recordEvent->handle(SecurityEventType::RoleUpdated, $request->user(), role: $role, metadata: ['changes' => $changes]);
+            }
+        }), self::UNIQUE_CONSTRAINTS);
 
         return $this->resource($role);
     }
@@ -75,7 +97,7 @@ class RoleController extends Controller
      * FR-013: los roles precargados y los que tienen usuarios activos no se
      * desactivan.
      */
-    public function updateStatus(UpdateRoleStatusRequest $request, Role $role): RoleResource
+    public function updateStatus(UpdateRoleStatusRequest $request, Role $role, RecordSecurityEvent $recordEvent): RoleResource
     {
         $activate = $request->boolean('is_active');
 
@@ -83,7 +105,7 @@ class RoleController extends Controller
             throw new ConflictHttpException('Los roles precargados no se pueden desactivar.');
         }
 
-        DB::transaction(function () use ($activate, $role) {
+        DB::transaction(function () use ($request, $activate, $role, $recordEvent) {
             if (! $activate) {
                 Role::query()->whereKey($role->getKey())->lockForUpdate()->first();
                 $activeUsers = $role->users()->where('is_active', true)->count();
@@ -95,7 +117,12 @@ class RoleController extends Controller
                 }
             }
 
-            $role->forceFill(['is_active' => $activate])->save();
+            $role->forceFill(['is_active' => $activate]);
+
+            if ($role->isDirty('is_active')) {
+                $role->save();
+                $recordEvent->handle(SecurityEventType::RoleStatusChanged, $request->user(), role: $role, metadata: ['is_active' => $activate]);
+            }
         });
 
         return $this->resource($role);

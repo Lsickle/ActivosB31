@@ -22,6 +22,8 @@ const user: UserRecord = {
   last_login_at: null,
   role: { id: 3, name: 'Consulta', code: 'consulta' },
   created_at: '2026-10-17T10:00:00Z',
+  locked_until: null,
+  employee: null,
 }
 
 describe('ResetPasswordDialog (RN-014, FR-009, FR-011)', () => {

@@ -1,10 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { assetTypesApi, type AssetTypeRecord } from 'app/features/configuracion/api'
 import { TRACKING_MODE_LABELS, TRACKING_MODES, assetTypeFormSchema, type TrackingMode } from 'app/features/configuracion/schemas'
+import type { FieldErrors } from 'app/lib/form-errors'
+import { FormField, fieldA11yProps } from '@/components/form-field'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { CatalogFormDialog, CatalogSelectField } from './CatalogFormDialog'
 import { ALL, CatalogTab, type CatalogFetchParams, type CatalogFilter, type CatalogLabels } from './CatalogTab'
 import { optionsPlaceholder, parentSelectItems, useConfigurationOptions } from './useConfigurationOptions'
@@ -43,7 +46,15 @@ const COLUMNS: ColumnDef<AssetTypeRecord>[] = [
   {
     accessorKey: 'tracking_mode',
     header: 'Modo',
-    cell: ({ row }) => TRACKING_MODE_LABELS[row.original.tracking_mode] ?? row.original.tracking_mode_label,
+    cell: ({ row }) => (
+      <div className="flex flex-col gap-0.5">
+        <span>{TRACKING_MODE_LABELS[row.original.tracking_mode] ?? row.original.tracking_mode_label}</span>
+        {/* RN-028 */}
+        {row.original.tracking_mode === 'quantity' && row.original.min_stock !== null && row.original.min_stock !== undefined && (
+          <span className="text-xs text-muted-foreground">Stock mínimo: {row.original.min_stock}</span>
+        )}
+      </div>
+    ),
   },
 ]
 
@@ -59,10 +70,78 @@ function fetchAssetTypes({ search, isActive, page, perPage, filters }: CatalogFe
 }
 
 function readAssetTypeValues(formData: FormData) {
+  // El campo de stock mínimo solo existe con "Por cantidad"; vacío → null.
+  const minStock = String(formData.get('min_stock') ?? '').trim()
   return {
     asset_category_id: Number(formData.get('asset_category_id')) || undefined,
     tracking_mode: formData.get('tracking_mode') || undefined,
+    min_stock: minStock === '' ? null : Number(minStock),
   }
+}
+
+// Campos propios del tipo de activo. Guarda el modo elegido para mostrar
+// "Stock mínimo" solo en tipos por cantidad (005 D-008, RN-028).
+function AssetTypeExtraFields({
+  record,
+  errors,
+  categoryItems,
+  categoryPlaceholder,
+}: {
+  record: AssetTypeRecord | null
+  errors: FieldErrors
+  categoryItems: { value: string; label: string }[]
+  categoryPlaceholder: string
+}) {
+  const [mode, setMode] = useState<string | null>(record?.tracking_mode ?? null)
+
+  return (
+    <>
+      {/* FR-007: solo categorías activas; al editar, también la actual aunque esté inactiva. */}
+      <CatalogSelectField
+        id="asset-type-category"
+        name="asset_category_id"
+        label="Categoría"
+        placeholder={categoryPlaceholder}
+        items={categoryItems}
+        defaultValue={record ? String(record.category.id) : null}
+        error={errors.asset_category_id}
+      />
+      {/* RN-007 / FR-009: el servidor rechaza el cambio si el tipo ya tiene activos. */}
+      <CatalogSelectField
+        id="asset-type-tracking-mode"
+        name="tracking_mode"
+        label="Modo de control"
+        placeholder="Selecciona el modo"
+        items={TRACKING_MODE_ITEMS}
+        defaultValue={record?.tracking_mode ?? null}
+        error={errors.tracking_mode}
+        description="Serializado: cada unidad se registra por separado. Por cantidad: se controlan existencias."
+        onValueChange={setMode}
+      />
+      {mode === 'quantity' && (
+        <FormField
+          id="asset-type-min-stock"
+          label={
+            <>
+              Stock mínimo <span className="font-normal text-muted-foreground">(opcional)</span>
+            </>
+          }
+          error={errors.min_stock}
+          description="Inventario avisará cuando las existencias totales queden por debajo."
+        >
+          <Input
+            {...fieldA11yProps('asset-type-min-stock', errors.min_stock, true)}
+            name="min_stock"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            defaultValue={record?.min_stock ?? ''}
+          />
+        </FormField>
+      )}
+    </>
+  )
 }
 
 // US2 / FR-002: tipos de activo, cada uno en una categoría (1:N) y con modo de
@@ -107,29 +186,12 @@ export function AssetTypesTab() {
           blocked={!record && options !== null && activeCategories.length === 0 ? 'Primero crea una categoría activa.' : undefined}
           readExtraValues={readAssetTypeValues}
           extraFields={(errors) => (
-            <>
-              {/* FR-007: solo categorías activas; al editar, también la actual aunque esté inactiva. */}
-              <CatalogSelectField
-                id="asset-type-category"
-                name="asset_category_id"
-                label="Categoría"
-                placeholder={optionsPlaceholder(options, failed, 'Selecciona una categoría')}
-                items={parentSelectItems(activeCategories, record?.category, '(inactiva)')}
-                defaultValue={record ? String(record.category.id) : null}
-                error={errors.asset_category_id}
-              />
-              {/* RN-007 / FR-009: el servidor rechaza el cambio si el tipo ya tiene activos. */}
-              <CatalogSelectField
-                id="asset-type-tracking-mode"
-                name="tracking_mode"
-                label="Modo de control"
-                placeholder="Selecciona el modo"
-                items={TRACKING_MODE_ITEMS}
-                defaultValue={record?.tracking_mode ?? null}
-                error={errors.tracking_mode}
-                description="Serializado: cada unidad se registra por separado. Por cantidad: se controlan existencias."
-              />
-            </>
+            <AssetTypeExtraFields
+              record={record}
+              errors={errors}
+              categoryItems={parentSelectItems(activeCategories, record?.category, '(inactiva)')}
+              categoryPlaceholder={optionsPlaceholder(options, failed, 'Selecciona una categoría')}
+            />
           )}
           save={(values) => (record ? assetTypesApi.update(record.id, values) : assetTypesApi.create(values))}
           onSaved={onSaved}

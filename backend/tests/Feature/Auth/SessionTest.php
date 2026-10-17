@@ -22,7 +22,8 @@ it('devuelve el usuario autenticado con su rol y permisos efectivos (FR-014)', f
         ->assertJsonPath('user.role.name', 'Consulta')
         ->assertJsonPath('user.role.id', $user->role_id)
         ->assertJsonPath('user.permissions', [
-            'activos.ver', 'inventario.ver', 'entregas.ver', 'empleados.ver',
+            // RN-040: Consulta no tiene empleados.ver en la precarga.
+            'activos.ver', 'inventario.ver', 'entregas.ver',
             'reportes.ver', 'configuracion.ver', 'usuarios.ver',
         ])
         ->assertJsonPath('user.must_change_password', false)

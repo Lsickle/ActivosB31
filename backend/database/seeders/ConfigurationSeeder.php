@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\TrackingMode;
 use App\Models\AssetCategory;
 use App\Models\LocationType;
+use App\Models\Position;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -33,7 +34,22 @@ class ConfigurationSeeder extends Seeder
             if (! LocationType::query()->exists()) {
                 $this->seedLocationTypes();
             }
+
+            if (! Position::query()->exists()) {
+                $this->seedPositions();
+            }
         });
+    }
+
+    /**
+     * RN-035: cargos o rangos confirmados por el usuario, en este orden
+     * (editables). Las compañías o turnos no se precargan (RN-036).
+     */
+    private function seedPositions(): void
+    {
+        foreach (['Comandante', 'Capitán', 'Teniente', 'Subteniente', 'Sargento', 'Cabo', 'Bombero', 'Administrativo'] as $name) {
+            Position::query()->create(['name' => $name]);
+        }
     }
 
     private function seedAssetCategories(): void

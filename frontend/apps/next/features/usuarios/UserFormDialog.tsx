@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { employeesOptions, type EmployeeOption } from 'app/features/empleados/api'
 import { createUser, updateUser, type RoleRecord, type UserRecord } from 'app/features/usuarios/api'
 import { PASSWORD_MIN_LENGTH } from 'app/features/auth/schemas'
 import { userCreateSchema, userUpdateSchema } from 'app/features/usuarios/schemas'
 import { ApiValidationError } from 'app/lib/api-client'
+import { useCan } from 'app/provider/auth'
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from 'app/lib/form-errors'
 import { FormField, fieldA11yProps } from '@/components/form-field'
 import { Button } from '@/components/ui/button'
@@ -13,6 +15,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+const NO_EMPLOYEE = 'none'
 
 // US2: crear o editar un usuario. Un solo rol (RN-013); al crear se asigna
 // una contraseña temporal que el usuario debe cambiar (RN-014). `user` = null crea.
@@ -55,6 +59,39 @@ function UserForm({
   const [formError, setFormError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // RN-015 / 004 D-005: vínculo opcional con un empleado. Solo quien tiene
+  // empleados.ver ve (y envía) el campo; sin ese permiso el vínculo no se toca.
+  const canLinkEmployee = useCan('empleados.ver')
+  const [employeeId, setEmployeeId] = useState<string>(user?.employee ? String(user.employee.id) : NO_EMPLOYEE)
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
+  const [employeesError, setEmployeesError] = useState(false)
+
+  useEffect(() => {
+    if (!canLinkEmployee) return
+    let cancelled = false
+    employeesOptions()
+      .then(({ data }) => {
+        if (!cancelled) setEmployees(data)
+      })
+      .catch(() => {
+        if (!cancelled) setEmployeesError(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [canLinkEmployee])
+
+  // Las opciones traen solo empleados activos; al editar se conserva el
+  // vínculo actual aunque no venga en la lista, marcado.
+  const currentEmployee = user?.employee ?? null
+  const employeeItems = [
+    { value: NO_EMPLOYEE, label: 'Sin vínculo' },
+    ...(currentEmployee && !employees.some((employee) => employee.id === currentEmployee.id)
+      ? [{ value: String(currentEmployee.id), label: `${currentEmployee.full_name} (vínculo actual)` }]
+      : []),
+    ...employees.map((employee) => ({ value: String(employee.id), label: `${employee.full_name} · ${employee.position}` })),
+  ]
+
   // US4 escenario 3: solo roles activos. RN-017: al editar se conserva el rol
   // actual del usuario aunque esté inactivo, marcado como tal.
   const roleOptions = roles.filter((role) => role.is_active || role.id === user?.role?.id)
@@ -73,6 +110,7 @@ function UserForm({
       username: formData.get('username') ?? '',
       email: formData.get('email') ?? '',
       role_id: roleId ? Number(roleId) : undefined,
+      ...(canLinkEmployee ? { employee_id: employeeId === NO_EMPLOYEE ? null : Number(employeeId) } : {}),
     }
 
     const parsed = isCreating
@@ -184,6 +222,37 @@ function UserForm({
           </p>
         )}
       </div>
+
+      {canLinkEmployee && (
+        <div className="flex flex-col gap-2">
+          <Label id="user-employee-label">
+            Empleado vinculado <span className="font-normal text-muted-foreground">(opcional)</span>
+          </Label>
+          <Select items={employeeItems} value={employeeId} onValueChange={(value) => setEmployeeId((value as string | null) ?? NO_EMPLOYEE)}>
+            <SelectTrigger
+              className="w-full"
+              aria-labelledby="user-employee-label"
+              aria-invalid={errors.employee_id ? true : undefined}
+              aria-describedby={errors.employee_id ? 'user-employee-error' : undefined}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {employeeItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {employeesError && <p className="text-xs text-muted-foreground">No fue posible cargar la lista de empleados.</p>}
+          {errors.employee_id && (
+            <p id="user-employee-error" className="text-xs text-destructive">
+              {errors.employee_id}
+            </p>
+          )}
+        </div>
+      )}
 
       {isCreating && (
         <div className="grid gap-4 sm:grid-cols-2">

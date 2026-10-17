@@ -81,7 +81,7 @@ El Administrador consulta la bitácora desde Usuarios y roles, filtra por tipo d
 - **FR-004**: Quien tenga gestionar Usuarios MUST poder desbloquear una cuenta; el listado MUST mostrar el estado de bloqueo.
 - **FR-005**: El sistema MUST registrar en la bitácora los eventos: ingreso exitoso, ingreso fallido, cierre de sesión, cuenta bloqueada, cuenta desbloqueada, usuario creado, usuario editado (incluido cambio de rol), usuario activado/desactivado, contraseña restablecida por el Administrador, contraseña cambiada por el usuario, rol creado, rol editado, rol activado/desactivado y matriz de permisos modificada.
 - **FR-006**: Cada evento MUST guardar fecha y hora, tipo, actor (si lo hay), usuario y/o rol afectado, IP, navegador y detalle del cambio. MUST NOT guardar contraseñas ni tokens.
-- **FR-007**: Los registros de la bitácora MUST ser de solo inserción: ni la aplicación ni una consulta directa del usuario de la aplicación a la base de datos pueden modificarlos o borrarlos.
+- **FR-007**: Los registros de la bitácora MUST ser de solo inserción: la aplicación no puede modificarlos ni borrarlos (ni por sus pantallas ni por la API ni por una consulta que se ejecute a través de ella), y la base de datos rechaza esos cambios con un trigger. Esto no protege contra quien tenga la credencial del rol dueño de la tabla; separar el rol de migraciones del rol de la aplicación (con solo `SELECT, INSERT` sobre la bitácora) queda pendiente antes de datos reales (ver D-002).
 - **FR-008**: La bitácora MUST consultarse solo con gestionar Usuarios (exclusivo del Administrador, RN-019), con filtros por tipo, usuario y rango de fechas, ordenada del más reciente al más antiguo y paginada.
 - **FR-009**: Un evento MUST registrarse solo si la acción se completó (misma transacción).
 
@@ -100,6 +100,6 @@ El Administrador consulta la bitácora desde Usuarios y roles, filtra por tipo d
 ## Assumptions
 
 - Umbral y duración (5 / 15 min) fijos en configuración del servidor, no editables desde la interfaz (RN-034).
-- Retención indefinida; no hay exportación de la bitácora en esta versión.
+- Retención pendiente de definir con el usuario (Ley 1581; tablas de retención documental); no hay exportación de la bitácora en esta versión.
 - La recuperación de contraseña por correo sigue pendiente (no hay servicio de correo).
 - Los eventos de los módulos de negocio (activos, entregas…) no van aquí: cada módulo lleva su propio historial.

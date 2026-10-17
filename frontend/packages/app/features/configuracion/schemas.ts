@@ -37,13 +37,29 @@ export const locationTypeFormSchema = catalogFormSchema
 export type AssetCategoryFormValues = CatalogFormValues
 export type LocationTypeFormValues = CatalogFormValues
 
-// US2: cada tipo pertenece a una categoría y tiene modo de control obligatorio (RN-007).
-export const assetTypeFormSchema = catalogFormSchema.extend({
-  asset_category_id: requiredId('Selecciona una categoría.'),
-  tracking_mode: z.enum(TRACKING_MODES, { error: 'Selecciona el modo de control.' }),
-})
+const MIN_STOCK_MESSAGE = 'El stock mínimo debe ser un número entero mayor o igual a 0.'
 
-export type AssetTypeFormValues = z.infer<typeof assetTypeFormSchema>
+// US2: cada tipo pertenece a una categoría y tiene modo de control obligatorio (RN-007).
+// 005 D-008 / RN-028: stock mínimo opcional, solo en tipos por cantidad; con
+// serializado se envía null (el backend lo rechaza si llega con valor).
+export const assetTypeFormSchema = catalogFormSchema
+  .extend({
+    asset_category_id: requiredId('Selecciona una categoría.'),
+    tracking_mode: z.enum(TRACKING_MODES, { error: 'Selecciona el modo de control.' }),
+    min_stock: z
+      .number({ error: MIN_STOCK_MESSAGE })
+      .int(MIN_STOCK_MESSAGE)
+      .min(0, MIN_STOCK_MESSAGE)
+      .max(2_147_483_647, MIN_STOCK_MESSAGE)
+      .nullable()
+      .optional(),
+  })
+  .transform(({ min_stock, ...values }) => ({
+    ...values,
+    min_stock: values.tracking_mode === 'quantity' ? (min_stock ?? null) : null,
+  }))
+
+export type AssetTypeFormValues = z.output<typeof assetTypeFormSchema>
 
 // RN-002: ubicación plana, con exactamente un tipo de ubicación.
 export const locationFormSchema = catalogFormSchema.extend({

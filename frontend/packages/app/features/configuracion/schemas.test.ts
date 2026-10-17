@@ -34,7 +34,20 @@ describe('Esquemas de configuración (spec 002, edge cases)', () => {
 
     expect(
       assetTypeFormSchema.parse({ name: 'Casco', description: '', asset_category_id: 2, tracking_mode: 'serialized' })
-    ).toEqual({ name: 'Casco', description: null, asset_category_id: 2, tracking_mode: 'serialized' })
+    ).toEqual({ name: 'Casco', description: null, asset_category_id: 2, tracking_mode: 'serialized', min_stock: null })
+  })
+
+  it('tipo de activo: stock mínimo opcional (entero ≥ 0) solo en tipos por cantidad (RN-028, 005 D-008)', () => {
+    const base = { name: 'Guantes', description: '', asset_category_id: 1 }
+    expect(assetTypeFormSchema.parse({ ...base, tracking_mode: 'quantity', min_stock: 10 }).min_stock).toBe(10)
+    expect(assetTypeFormSchema.parse({ ...base, tracking_mode: 'quantity', min_stock: null }).min_stock).toBeNull()
+    // Con serializado el backend lo rechaza: se envía null aunque el campo tuviera valor.
+    expect(assetTypeFormSchema.parse({ ...base, tracking_mode: 'serialized', min_stock: 10 }).min_stock).toBeNull()
+
+    const negative = assetTypeFormSchema.safeParse({ ...base, tracking_mode: 'quantity', min_stock: -1 })
+    expect(negative.error?.issues[0]).toMatchObject({ path: ['min_stock'], message: 'El stock mínimo debe ser un número entero mayor o igual a 0.' })
+    const decimal = assetTypeFormSchema.safeParse({ ...base, tracking_mode: 'quantity', min_stock: 1.5 })
+    expect(decimal.error?.issues[0]?.message).toBe('El stock mínimo debe ser un número entero mayor o igual a 0.')
   })
 
   it('ubicación: exige tipo de ubicación (RN-002)', () => {

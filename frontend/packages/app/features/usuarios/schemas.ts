@@ -30,11 +30,16 @@ const optionalEmailSchema = z
 
 const roleIdSchema = z.number({ error: 'Selecciona un rol.' }).int().positive('Selecciona un rol.')
 
+// RN-015 / 004 D-005: vínculo opcional con un empleado. null = sin vínculo;
+// ausente = no se toca (quien no tiene empleados.ver no lo envía).
+const employeeIdSchema = z.number().int().positive('Selecciona un empleado válido.').nullable().optional()
+
 const userBaseSchema = z.object({
   name: nameSchema,
   username: usernameSchema,
   email: optionalEmailSchema,
   role_id: roleIdSchema,
+  employee_id: employeeIdSchema,
 })
 
 export const userUpdateSchema = userBaseSchema

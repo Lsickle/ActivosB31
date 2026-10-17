@@ -18,6 +18,10 @@ export type UserRecord = {
   last_login_at: string | null
   role: RoleSummary | null
   created_at: string
+  // RN-034 (003): ISO 8601; null si no está bloqueada o el bloqueo ya venció.
+  locked_until: string | null
+  // RN-015 (004 D-005): empleado vinculado, opcional.
+  employee: { id: number; full_name: string } | null
 }
 
 export type RoleRecord = {
@@ -76,6 +80,11 @@ export function updateUserStatus(id: number, isActive: boolean): Promise<{ data:
   return apiFetch(`/api/users/${id}/status`, json('PATCH', { is_active: isActive }))
 }
 
+// RN-034 / FR-004 (003): sin efecto si la cuenta no estaba bloqueada.
+export function unlockUser(id: number): Promise<{ data: UserRecord }> {
+  return apiFetch(`/api/users/${id}/unlock`, { method: 'POST' })
+}
+
 export function resetUserPassword(id: number, values: NewPasswordValues): Promise<{ message: string }> {
   return apiFetch(`/api/users/${id}/password`, json('PUT', values))
 }
@@ -106,4 +115,53 @@ export function listPermissions(): Promise<{ data: PermissionModule[] }> {
 
 export function updateRolePermissions(id: number, permissions: string[]): Promise<{ data: RoleRecord }> {
   return apiFetch(`/api/roles/${id}/permissions`, json('PUT', { permissions }))
+}
+
+// ---- Bitácora de seguridad (003-seguridad-bitacora, FR-008; solo usuarios.gestionar) ----
+
+export type SecurityEventUser = { id: number; name: string; username: string }
+
+export type SecurityEvent = {
+  id: number
+  event: string
+  event_label: string
+  created_at: string
+  actor: SecurityEventUser | null
+  target_user: SecurityEventUser | null
+  target_role: { id: number; name: string } | null
+  // Texto ingresado en un login fallido (la cuenta puede no existir).
+  login_attempted: string | null
+  ip_address: string | null
+  user_agent: string | null
+  metadata: Record<string, unknown> | null
+}
+
+export type SecurityEventType = { code: string; label: string }
+
+export type ListSecurityEventsParams = {
+  event?: string
+  // Actor o afectado.
+  userId?: number
+  // YYYY-MM-DD, inclusivas.
+  from?: string
+  to?: string
+  page?: number
+  perPage?: number
+}
+
+export function listSecurityEvents(params: ListSecurityEventsParams = {}): Promise<Paginated<SecurityEvent>> {
+  return apiFetch(
+    `/api/security-events${query({
+      event: params.event,
+      user_id: params.userId,
+      from: params.from,
+      to: params.to,
+      page: params.page,
+      per_page: params.perPage,
+    })}`
+  )
+}
+
+export function listSecurityEventTypes(): Promise<{ data: SecurityEventType[] }> {
+  return apiFetch('/api/security-events/types')
 }

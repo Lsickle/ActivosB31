@@ -1,18 +1,22 @@
 'use client'
 
-import { useRequireAuth } from 'app/provider/auth'
+import { useCan, useRequireAuth } from 'app/provider/auth'
 import { AccessDenied } from '@/components/access-denied'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PermissionMatrix } from './PermissionMatrix'
 import { RolesTab } from './RolesTab'
+import { SecurityLogTab } from './SecurityLogTab'
 import { UsersTab } from './UsersTab'
 
 // Módulo "Usuarios y roles" (D-008): pestañas Usuarios, Roles y Permisos.
 // Ver = usuarios.ver; las acciones de cada pestaña exigen usuarios.gestionar.
 // Las pestañas ocultas se desmontan: al volver a una se recargan sus datos
 // (p. ej. un rol recién creado aparece en la matriz).
+// La pestaña Bitácora (003, FR-008) exige usuarios.gestionar (RN-019); el
+// servidor también rechaza la consulta sin ese permiso.
 export function UsuariosScreen() {
   const { isAuthorized, isForbidden } = useRequireAuth('usuarios.ver')
+  const canViewSecurityLog = useCan('usuarios.gestionar')
 
   if (isForbidden) {
     return <AccessDenied />
@@ -33,6 +37,7 @@ export function UsuariosScreen() {
           <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="permisos">Permisos</TabsTrigger>
+          {canViewSecurityLog && <TabsTrigger value="bitacora">Bitácora</TabsTrigger>}
         </TabsList>
         <TabsContent value="usuarios" className="pt-2">
           <UsersTab />
@@ -43,6 +48,11 @@ export function UsuariosScreen() {
         <TabsContent value="permisos" className="pt-2">
           <PermissionMatrix />
         </TabsContent>
+        {canViewSecurityLog && (
+          <TabsContent value="bitacora" className="pt-2">
+            <SecurityLogTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

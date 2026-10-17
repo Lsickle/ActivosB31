@@ -2,8 +2,10 @@
 
 use App\Models\AssetCategory;
 use App\Models\AssetType;
+use App\Models\Company;
 use App\Models\Location;
 use App\Models\LocationType;
+use App\Models\Position;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,6 +14,9 @@ dataset('catalogos', [
     'tipos de activo' => [AssetType::class],
     'tipos de ubicación' => [LocationType::class],
     'ubicaciones' => [Location::class],
+    // 004 (D-001): cargos y compañías siguen las mismas reglas.
+    'cargos' => [Position::class],
+    'compañías' => [Company::class],
 ]);
 
 /**

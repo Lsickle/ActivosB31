@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assetCategoriesApi,
   assetTypesApi,
+  companiesApi,
   getConfigurationOptions,
   locationTypesApi,
   locationsApi,
+  positionsApi,
 } from './api'
 
 const apiFetch = vi.fn()
@@ -55,6 +57,35 @@ describe('API de configuración (contracts/api.md)', () => {
     })
 
     for (const api of [assetCategoriesApi, assetTypesApi, locationTypesApi, locationsApi]) {
+      expect(api).not.toHaveProperty('remove')
+      expect(api).not.toHaveProperty('delete')
+    }
+  })
+
+  // specs/004-modulo-empleados D-001: cargos (RN-035) y compañías (RN-036) siguen el patrón de 002.
+  it('cargos y compañías usan /api/positions y /api/companies sin DELETE (004 D-001)', async () => {
+    await positionsApi.list({ search: 'teniente', isActive: true })
+    expect(apiFetch).toHaveBeenCalledWith('/api/positions?search=teniente&is_active=1')
+
+    await companiesApi.create({ name: 'Compañía A', description: null })
+    expect(apiFetch).toHaveBeenLastCalledWith('/api/companies', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Compañía A', description: null }),
+    })
+
+    await positionsApi.update(3, { name: 'Sargento', description: null })
+    expect(apiFetch).toHaveBeenLastCalledWith('/api/positions/3', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Sargento', description: null }),
+    })
+
+    await companiesApi.updateStatus(2, false)
+    expect(apiFetch).toHaveBeenLastCalledWith('/api/companies/2/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: false }),
+    })
+
+    for (const api of [positionsApi, companiesApi]) {
       expect(api).not.toHaveProperty('remove')
       expect(api).not.toHaveProperty('delete')
     }

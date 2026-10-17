@@ -8,11 +8,19 @@ import { UserFormDialog } from './UserFormDialog'
 const createUser = vi.fn()
 const updateUser = vi.fn()
 const onSaved = vi.fn()
+const employeesOptions = vi.fn()
+const can = vi.fn()
 
 vi.mock('app/features/usuarios/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('app/features/usuarios/api')>()),
   createUser: (...args: unknown[]) => createUser(...args),
   updateUser: (...args: unknown[]) => updateUser(...args),
+}))
+vi.mock('app/features/empleados/api', () => ({
+  employeesOptions: (...args: unknown[]) => employeesOptions(...args),
+}))
+vi.mock('app/provider/auth', () => ({
+  useCan: (code: string) => can(code),
 }))
 
 function role(overrides: Partial<RoleRecord>): RoleRecord {
@@ -36,6 +44,8 @@ const existing: UserRecord = {
   last_login_at: null,
   role: { id: 3, name: 'Consulta', code: 'consulta' },
   created_at: '2026-10-17T10:00:00Z',
+  locked_until: null,
+  employee: null,
 }
 
 function renderDialog(user: UserRecord | null = null) {
@@ -64,6 +74,7 @@ async function fillCreate(dialog: HTMLElement, username = 'JPerez') {
 describe('UserFormDialog (US2, FR-008, FR-009, RN-013)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    can.mockReturnValue(false)
   })
 
   it('crea el usuario con contraseña temporal, normalizado a minúsculas', async () => {
@@ -172,5 +183,113 @@ describe('UserFormDialog (US2, FR-008, FR-009, RN-013)', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Debe quedar al menos un Administrador activo.')
+  })
+})
+
+async function chooseEmployee(dialog: HTMLElement, name: string) {
+  fireEvent.click(within(dialog).getByRole('combobox', { name: /Empleado vinculado/ }))
+  const option = await screen.findByRole('option', { name })
+  await act(async () => {
+    fireEvent.pointerDown(option)
+    fireEvent.click(option)
+  })
+}
+
+describe('UserFormDialog: empleado vinculado (RN-015, 004 D-005)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    can.mockImplementation((code: string) => code === 'empleados.ver')
+    employeesOptions.mockResolvedValue({
+      data: [
+        { id: 4, full_name: 'Ana Gómez', position: 'Bombero' },
+        { id: 5, full_name: 'Luis Rojas', position: 'Cabo' },
+      ],
+    })
+  })
+
+  it('sin empleados.ver no muestra el select ni envía employee_id', async () => {
+    can.mockReturnValue(false)
+    createUser.mockResolvedValue({ data: { ...existing, id: 10 } })
+    const dialog = renderDialog()
+
+    expect(within(dialog).queryByRole('combobox', { name: /Empleado vinculado/ })).not.toBeInTheDocument()
+    expect(employeesOptions).not.toHaveBeenCalled()
+
+    await fillCreate(dialog)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear usuario' }))
+
+    expect(createUser).toHaveBeenCalledTimes(1)
+    expect(createUser.mock.calls[0][0]).not.toHaveProperty('employee_id')
+  })
+
+  it('sin empleados.ver al editar no toca el vínculo existente', async () => {
+    can.mockReturnValue(false)
+    updateUser.mockResolvedValue({ data: existing })
+    const dialog = renderDialog({ ...existing, employee: { id: 4, full_name: 'Ana Gómez' } })
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    expect(updateUser.mock.calls[0][1]).not.toHaveProperty('employee_id')
+  })
+
+  it('ofrece "Sin vínculo" y los empleados activos, y envía el elegido al crear', async () => {
+    createUser.mockResolvedValue({ data: { ...existing, id: 10 } })
+    const dialog = renderDialog()
+
+    await fillCreate(dialog)
+    fireEvent.click(within(dialog).getByRole('combobox', { name: /Empleado vinculado/ }))
+    expect(await screen.findByRole('option', { name: 'Sin vínculo' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Ana Gómez · Bombero' })).toBeInTheDocument()
+    const option = screen.getByRole('option', { name: 'Luis Rojas · Cabo' })
+    await act(async () => {
+      fireEvent.pointerDown(option)
+      fireEvent.click(option)
+    })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear usuario' }))
+
+    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ username: 'jperez', employee_id: 5 }))
+  })
+
+  it('sin elegir empleado envía employee_id null', async () => {
+    createUser.mockResolvedValue({ data: { ...existing, id: 10 } })
+    const dialog = renderDialog()
+
+    await fillCreate(dialog)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear usuario' }))
+
+    expect(createUser.mock.calls[0][0]).toHaveProperty('employee_id', null)
+  })
+
+  it('al editar conserva el empleado actual aunque no venga en las opciones, marcado', async () => {
+    updateUser.mockResolvedValue({ data: existing })
+    const dialog = renderDialog({ ...existing, employee: { id: 7, full_name: 'Pedro Inactivo' } })
+
+    fireEvent.click(within(dialog).getByRole('combobox', { name: /Empleado vinculado/ }))
+    expect(await screen.findByRole('option', { name: 'Pedro Inactivo (vínculo actual)' })).toBeInTheDocument()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    expect(updateUser).toHaveBeenCalledWith(9, expect.objectContaining({ employee_id: 7 }))
+  })
+
+  it('permite desvincular eligiendo "Sin vínculo"', async () => {
+    updateUser.mockResolvedValue({ data: existing })
+    const dialog = renderDialog({ ...existing, employee: { id: 4, full_name: 'Ana Gómez' } })
+
+    await chooseEmployee(dialog, 'Sin vínculo')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    expect(updateUser).toHaveBeenCalledWith(9, expect.objectContaining({ employee_id: null }))
+  })
+
+  it('muestra el error del backend en el campo (empleado ya vinculado)', async () => {
+    updateUser.mockRejectedValue(new ApiValidationError('Inválido', { employee_id: ['El empleado ya está vinculado a otro usuario.'] }))
+    const dialog = renderDialog(existing)
+
+    await chooseEmployee(dialog, 'Ana Gómez · Bombero')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    expect(await within(dialog).findByText('El empleado ya está vinculado a otro usuario.')).toBeInTheDocument()
   })
 })

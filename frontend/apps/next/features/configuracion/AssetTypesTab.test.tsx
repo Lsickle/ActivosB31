@@ -34,6 +34,7 @@ function assetType(overrides: Partial<AssetTypeRecord>): AssetTypeRecord {
     description: null,
     tracking_mode: 'serialized',
     tracking_mode_label: 'Serializado',
+    min_stock: null,
     is_active: true,
     category: { id: 1, name: 'EPP', is_active: true },
     created_at: '2026-10-17T10:00:00Z',
@@ -55,6 +56,8 @@ const options: ConfigurationOptions = {
   asset_types: [],
   location_types: [],
   locations: [],
+  positions: [],
+  companies: [],
 }
 
 const types = [
@@ -150,6 +153,7 @@ describe('AssetTypesTab (US2, FR-002, RN-007)', () => {
       description: null,
       asset_category_id: 2,
       tracking_mode: 'serialized',
+      min_stock: null,
     })
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Tipo de activo "Radio portátil" creado.'))
   })
@@ -176,7 +180,54 @@ describe('AssetTypesTab (US2, FR-002, RN-007)', () => {
       description: null,
       asset_category_id: 3,
       tracking_mode: 'quantity',
+      min_stock: null,
     })
+  })
+
+  it('"Stock mínimo" solo aparece con el modo "Por cantidad" y se envía (RN-028, 005 D-008)', async () => {
+    create.mockResolvedValue({ data: assetType({ id: 9, name: 'Guantes', tracking_mode: 'quantity' }) })
+    render(<AssetTypesTab />)
+    await screen.findByRole('row', { name: /Motosierra/ })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nuevo tipo de activo' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo tipo de activo' })
+    expect(within(dialog).queryByLabelText(/Stock mínimo/)).not.toBeInTheDocument()
+
+    await chooseOption(within(dialog).getByRole('combobox', { name: 'Categoría' }), 'EPP')
+    await chooseOption(within(dialog).getByRole('combobox', { name: 'Modo de control' }), 'Por cantidad')
+    await userEvent.type(within(dialog).getByLabelText('Nombre'), 'Guantes')
+    const minStock = within(dialog).getByLabelText(/Stock mínimo/)
+    await userEvent.type(minStock, '-2')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+    expect(await within(dialog).findByText('El stock mínimo debe ser un número entero mayor o igual a 0.')).toBeInTheDocument()
+    expect(create).not.toHaveBeenCalled()
+
+    await userEvent.clear(minStock)
+    await userEvent.type(minStock, '12')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+    expect(create).toHaveBeenCalledWith({
+      name: 'Guantes',
+      description: null,
+      asset_category_id: 1,
+      tracking_mode: 'quantity',
+      min_stock: 12,
+    })
+  })
+
+  it('al editar un tipo por cantidad muestra su stock mínimo y lo oculta al pasar a serializado', async () => {
+    list.mockResolvedValue(page([assetType({ id: 2, name: 'Guantes de rescate', tracking_mode: 'quantity', min_stock: 8 })]))
+    update.mockResolvedValue({ data: types[1] })
+    render(<AssetTypesTab />)
+    await screen.findByRole('row', { name: /Guantes de rescate/ })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Editar Guantes de rescate' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Editar tipo de activo' })
+    expect(within(dialog).getByLabelText(/Stock mínimo/)).toHaveValue(8)
+
+    await chooseOption(within(dialog).getByRole('combobox', { name: 'Modo de control' }), 'Serializado')
+    expect(within(dialog).queryByLabelText(/Stock mínimo/)).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+    expect(update).toHaveBeenCalledWith(2, expect.objectContaining({ tracking_mode: 'serialized', min_stock: null }))
   })
 
   it('muestra junto al campo el rechazo del cambio de modo (FR-009)', async () => {

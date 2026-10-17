@@ -112,8 +112,20 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const body = await response.json().catch(() => null)
 
+  if (!response.ok) {
+    throwForResponse(response, body)
+  }
+
+  return body as T
+}
+
+// Convierte una respuesta no-OK en el error tipado correspondiente y avisa a
+// los listeners de auth (401/403). Compartido por apiFetch y apiDownload.
+function throwForResponse(response: Response, body: { message?: unknown; errors?: unknown; code?: unknown } | null): never {
+  const message = typeof body?.message === 'string' ? body.message : undefined
+
   if (response.status === 422 && body?.errors) {
-    throw new ApiValidationError(body.message ?? 'Error de validación.', body.errors)
+    throw new ApiValidationError(message ?? 'Error de validación.', body.errors as Record<string, string[]>)
   }
 
   if (response.status === 429) {
@@ -122,15 +134,77 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     throw new RateLimitError(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : DEFAULT_RETRY_AFTER_SECONDS)
   }
 
-  if (!response.ok) {
-    const code = typeof body?.code === 'string' ? body.code : undefined
-    if (response.status === 401) {
-      notifyAuthError('unauthenticated')
-    } else if (response.status === 403) {
-      notifyAuthError(code === PASSWORD_CHANGE_REQUIRED ? 'password_change_required' : 'forbidden')
+  const code = typeof body?.code === 'string' ? body.code : undefined
+  if (response.status === 401) {
+    notifyAuthError('unauthenticated')
+  } else if (response.status === 403) {
+    notifyAuthError(code === PASSWORD_CHANGE_REQUIRED ? 'password_change_required' : 'forbidden')
+  }
+  throw new ApiError(message ?? `Error inesperado (${response.status}).`, response.status, code)
+}
+
+// ---- Descargas (008 D-002, RN-032) ----
+
+export type DownloadedFile = {
+  blob: Blob
+  /** Nombre sugerido por el servidor (Content-Disposition); null si no viene o no es legible. */
+  filename: string | null
+}
+
+// Último segmento de una ruta: el nombre nunca puede traer directorios.
+function baseName(name: string): string | null {
+  const segment = name.split(/[\\/]/).pop()?.trim() ?? ''
+  return segment === '' || segment === '.' || segment === '..' ? null : segment
+}
+
+/**
+ * Nombre de archivo de un header Content-Disposition. Prefiere `filename*`
+ * (RFC 5987, UTF-8 con tildes) sobre `filename`. Requiere que el backend
+ * exponga el header por CORS (`Access-Control-Expose-Headers`) cuando el
+ * frontend está en otro origen (dev).
+ */
+export function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null
+
+  const extended = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(header)
+  if (extended?.[2]) {
+    try {
+      return baseName(decodeURIComponent(extended[2].trim().replace(/^"|"$/g, '')))
+    } catch {
+      // Codificación inválida: se intenta con `filename`.
     }
-    throw new ApiError(body?.message ?? `Error inesperado (${response.status}).`, response.status, code)
   }
 
-  return body as T
+  const plain = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/i.exec(header)
+  const value = plain?.[1] ?? plain?.[2]
+  return value ? baseName(value.trim()) : null
+}
+
+/**
+ * GET de un archivo (Excel/PDF) con la misma sesión y CSRF que apiFetch. Pide
+ * `Accept: application/json` para que los errores lleguen en JSON y se
+ * conviertan en los mismos errores tipados; el éxito llega como binario.
+ */
+export async function apiDownload(path: string): Promise<DownloadedFile> {
+  await ensureCsrfCookie()
+  const xsrfToken = readCookie('XSRF-TOKEN')
+
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throwForResponse(response, body)
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFromContentDisposition(response.headers.get('Content-Disposition')),
+  }
 }

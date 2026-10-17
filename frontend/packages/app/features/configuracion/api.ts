@@ -3,6 +3,7 @@ import { jsonBody, query, type Paginated, type QueryValue } from '../../lib/api-
 import type {
   AssetCategoryFormValues,
   AssetTypeFormValues,
+  CatalogFormValues,
   LocationFormValues,
   LocationTypeFormValues,
   TrackingMode,
@@ -28,6 +29,8 @@ export type AssetTypeRecord = Timestamps & {
   description: string | null
   tracking_mode: TrackingMode
   tracking_mode_label: string
+  /** 005 D-008 / RN-028: solo en tipos por cantidad. */
+  min_stock: number | null
   is_active: boolean
   category: { id: number; name: string; is_active: boolean }
 }
@@ -46,6 +49,22 @@ export type LocationRecord = Timestamps & {
   description: string | null
   is_active: boolean
   location_type: { id: number; name: string; is_active: boolean }
+}
+
+// specs/004-modulo-empleados D-001: cargos o rangos (RN-035) y compañías o
+// turnos (RN-036), catálogos de Configuración con el mismo patrón de 002.
+export type PositionRecord = Timestamps & {
+  id: number
+  name: string
+  description: string | null
+  is_active: boolean
+}
+
+export type CompanyRecord = Timestamps & {
+  id: number
+  name: string
+  description: string | null
+  is_active: boolean
 }
 
 export type CatalogListParams = {
@@ -106,6 +125,10 @@ export const locationsApi = catalogApi<LocationRecord, LocationFormValues, Locat
   location_type_id: params.locationTypeId,
 }))
 
+export const positionsApi = catalogApi<PositionRecord, CatalogFormValues>('/api/positions')
+
+export const companiesApi = catalogApi<CompanyRecord, CatalogFormValues>('/api/companies')
+
 // ---- Opciones disponibles (FR-010, D-005) ----
 // Solo registros activos; tipos de activo de categorías activas y ubicaciones
 // de tipos activos. Sin paginar, ordenados por nombre.
@@ -115,6 +138,9 @@ export type ConfigurationOptions = {
   asset_types: { id: number; name: string; asset_category_id: number; tracking_mode: TrackingMode }[]
   location_types: { id: number; name: string }[]
   locations: { id: number; name: string; location_type_id: number }[]
+  /** 004 D-001: cargos y compañías activos, para el formulario de empleados. */
+  positions: { id: number; name: string }[]
+  companies: { id: number; name: string }[]
 }
 
 export function getConfigurationOptions(): Promise<{ data: ConfigurationOptions }> {

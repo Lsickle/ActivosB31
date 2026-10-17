@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { ChevronLeftIcon, ChevronRightIcon, KeyRoundIcon, PencilIcon, PlusIcon, UserCheckIcon, UserXIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, KeyRoundIcon, LockOpenIcon, PencilIcon, PlusIcon, UserCheckIcon, UserXIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   listRoles,
   listUsers,
+  unlockUser,
   updateUserStatus,
   type PaginationMeta,
   type RoleRecord,
@@ -39,6 +40,15 @@ function formatLastLogin(value: string | null): string {
   return value ? dateTimeFormat.format(new Date(value)) : 'Nunca'
 }
 
+// RN-034 (003): el bloqueo dura 15 min, así que basta la hora (24 h).
+const lockTimeFormat = new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+// El backend ya devuelve null si el bloqueo venció; se revisa de nuevo por si
+// la lista lleva rato abierta.
+function isLocked(user: UserRecord): boolean {
+  return user.locked_until !== null && new Date(user.locked_until).getTime() > Date.now()
+}
+
 // US2 / FR-007: usuarios del sistema. Se crean, editan, desactivan y
 // reactivan; no se borran. Las acciones solo aparecen con usuarios.gestionar.
 export function UsersTab() {
@@ -60,6 +70,7 @@ export function UsersTab() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [resetTarget, setResetTarget] = useState<UserRecord | null>(null)
   const [statusTarget, setStatusTarget] = useState<UserRecord | null>(null)
+  const [unlockTarget, setUnlockTarget] = useState<UserRecord | null>(null)
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), [])
 
@@ -136,6 +147,18 @@ export function UsersTab() {
     return true
   }
 
+  async function handleUnlock(): Promise<boolean> {
+    if (!unlockTarget) return true
+    try {
+      await unlockUser(unlockTarget.id)
+      toast.success(`Cuenta ${unlockTarget.username} desbloqueada.`)
+      reload()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No fue posible desbloquear la cuenta.')
+    }
+    return true
+  }
+
   const columns = useMemo<ColumnDef<UserRecord>[]>(() => {
     const base: ColumnDef<UserRecord>[] = [
       {
@@ -144,7 +167,13 @@ export function UsersTab() {
         cell: ({ row }) => (
           <div className="flex flex-col items-start gap-1">
             <span className="font-medium">{row.original.name}</span>
+            {row.original.employee && (
+              <span className="text-xs text-muted-foreground">Empleado: {row.original.employee.full_name}</span>
+            )}
             {row.original.must_change_password && <Badge variant="secondary">Cambio de contraseña pendiente</Badge>}
+            {isLocked(row.original) && (
+              <Badge variant="destructive">Bloqueada hasta {lockTimeFormat.format(new Date(row.original.locked_until!))}</Badge>
+            )}
           </div>
         ),
       },
@@ -182,6 +211,18 @@ export function UsersTab() {
               <Button size="icon-sm" variant="ghost" aria-label={`Editar ${user.name}`} title="Editar" onClick={() => openForm(user)}>
                 <PencilIcon />
               </Button>
+              {/* RN-034 / FR-004: desbloqueo manual antes de que venzan los 15 min. */}
+              {isLocked(user) && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Desbloquear ${user.name}`}
+                  title="Desbloquear"
+                  onClick={() => setUnlockTarget(user)}
+                >
+                  <LockOpenIcon />
+                </Button>
+              )}
               {/* RN-018: la propia contraseña se cambia en "Cambiar contraseña" (pide la actual). */}
               {!isSelf && (
                 <Button
@@ -330,6 +371,14 @@ export function UsersTab() {
             confirmLabel={statusTarget?.is_active ? 'Desactivar' : 'Activar'}
             destructive={Boolean(statusTarget?.is_active)}
             onConfirm={handleStatusChange}
+          />
+          <ConfirmDialog
+            open={unlockTarget !== null}
+            onOpenChange={(open) => !open && setUnlockTarget(null)}
+            title={`¿Desbloquear la cuenta de ${unlockTarget?.name}?`}
+            description="Podrá volver a intentar el ingreso de inmediato y su contador de intentos fallidos vuelve a cero."
+            confirmLabel="Desbloquear"
+            onConfirm={handleUnlock}
           />
         </>
       )}

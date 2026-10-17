@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listRoles, listUsers, updateRolePermissions, updateUserStatus } from './api'
+import {
+  listRoles,
+  listSecurityEvents,
+  listSecurityEventTypes,
+  listUsers,
+  unlockUser,
+  updateRolePermissions,
+  updateUserStatus,
+} from './api'
 
 const apiFetch = vi.fn()
 
@@ -34,5 +42,27 @@ describe('API de usuarios y roles (contracts/api.md)', () => {
       method: 'PUT',
       body: JSON.stringify({ permissions: ['empleados.ver', 'empleados.gestionar'] }),
     })
+  })
+
+  // 003-seguridad-bitacora (FR-008, contracts/api.md)
+  it('listSecurityEvents arma la query con tipo, usuario, fechas y paginación', async () => {
+    await listSecurityEvents({ event: 'login_failed', userId: 4, from: '2026-10-01', to: '2026-10-17', page: 2, perPage: 25 })
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/api/security-events?event=login_failed&user_id=4&from=2026-10-01&to=2026-10-17&page=2&per_page=25'
+    )
+
+    await listSecurityEvents({ event: '', from: '' })
+    expect(apiFetch).toHaveBeenLastCalledWith('/api/security-events')
+  })
+
+  it('listSecurityEventTypes consulta el catálogo de tipos', async () => {
+    await listSecurityEventTypes()
+    expect(apiFetch).toHaveBeenCalledWith('/api/security-events/types')
+  })
+
+  // RN-034 / FR-004
+  it('unlockUser hace POST a /unlock', async () => {
+    await unlockUser(7)
+    expect(apiFetch).toHaveBeenCalledWith('/api/users/7/unlock', { method: 'POST' })
   })
 })

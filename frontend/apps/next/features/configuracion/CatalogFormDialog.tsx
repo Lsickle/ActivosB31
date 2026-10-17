@@ -202,6 +202,7 @@ export function CatalogSelectField({
   defaultValue,
   error,
   description,
+  onValueChange,
 }: {
   id: string
   name: string
@@ -211,6 +212,8 @@ export function CatalogSelectField({
   defaultValue: string | null
   error?: string
   description?: React.ReactNode
+  /** Para mostrar u ocultar campos dependientes (p. ej. stock mínimo según el modo). */
+  onValueChange?: (value: string | null) => void
 }) {
   const [value, setValue] = useState<string | null>(defaultValue)
   const labelId = `${id}-label`
@@ -220,7 +223,14 @@ export function CatalogSelectField({
   return (
     <div className="flex flex-col gap-2">
       <Label id={labelId}>{label}</Label>
-      <Select items={items} value={value} onValueChange={(next) => setValue(next as string | null)}>
+      <Select
+        items={items}
+        value={value}
+        onValueChange={(next) => {
+          setValue(next as string | null)
+          onValueChange?.(next as string | null)
+        }}
+      >
         <SelectTrigger
           className="w-full"
           aria-labelledby={labelId}

@@ -9,7 +9,8 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Alta de usuario con contraseña temporal (RN-014) y un rol activo (RN-013).
+ * Alta de usuario con contraseña temporal (RN-014), un rol activo (RN-013) y,
+ * opcionalmente, un empleado activo sin otro usuario vinculado (RN-015).
  */
 class StoreUserRequest extends FormRequest
 {
@@ -17,7 +18,10 @@ class StoreUserRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()->can('create', User::class);
+        // RN-015: vincular un empleado exige además empleados.ver (403, como el
+        // resto de la autorización; no se valida el cuerpo sin permiso).
+        return $this->user()->can('create', User::class)
+            && ($this->input('employee_id') === null || $this->user()->can('linkEmployee', User::class));
     }
 
     /**
@@ -29,6 +33,11 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             ...$this->identifierRules(),
             'role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where('is_active', true)],
+            'employee_id' => [
+                'nullable', 'integer',
+                Rule::exists('employees', 'id')->where('is_active', true),
+                Rule::unique('users', 'employee_id'),
+            ],
             'password' => ['required', 'string', 'confirmed', PasswordRules::policy()],
         ];
     }

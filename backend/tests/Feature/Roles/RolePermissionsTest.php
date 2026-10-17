@@ -46,7 +46,7 @@ it('rechaza códigos de permiso desconocidos', function (?array $permissions) {
     $this->putJson("/api/roles/{$consulta->id}/permissions", ['permissions' => $permissions])
         ->assertUnprocessable();
 
-    expect($consulta->permissions()->count())->toBe(7);
+    expect($consulta->permissions()->count())->toBe(6); // RN-040: sin empleados.ver
 })->with([
     'inexistente' => [['activos.borrar']],
     'reportes.gestionar' => [['reportes.gestionar']],
@@ -71,7 +71,7 @@ it('RN-009: niega editar la matriz sin usuarios.gestionar', function () {
     $this->putJson("/api/roles/{$consulta->id}/permissions", ['permissions' => ['activos.gestionar']])
         ->assertForbidden();
 
-    expect($consulta->permissions()->count())->toBe(7);
+    expect($consulta->permissions()->count())->toBe(6); // RN-040: sin empleados.ver
 });
 
 it('SC-003: el cambio en la matriz rige en la siguiente petición del usuario afectado', function () {

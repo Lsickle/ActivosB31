@@ -30,6 +30,7 @@ Decisiones técnicas. Ninguna cambia reglas de negocio; las que podrían hacerlo
 - **Decision**: `GET /api/configuracion/options` devuelve en una sola respuesta, sin paginar, las categorías activas, los tipos activos de categorías activas (con `tracking_mode` y `asset_category_id`), los tipos de ubicación activos y las ubicaciones activas de tipos activos. Requiere `configuracion.ver` por ahora.
 - **Rationale**: un solo request para los formularios de Activos/Inventario; los formularios de Configuración también lo usan para los selects (categorías activas, tipos de ubicación activos — FR-007).
 - **Pendiente**: cuando exista Activos, decidir con el usuario si quien tiene `activos.gestionar` sin `configuracion.ver` debe poder leer las opciones. Hoy todos los roles tienen `configuracion.ver` (RN-011), así que no hay impacto.
+- **Resuelto 2026-10-17** (feature 004): las opciones las lee cualquier usuario autenticado y activo con al menos un permiso `*.ver` de cualquier módulo (`ConfigurationCatalogPolicy::viewOptions`); solo un usuario sin ningún permiso recibe 403. Son nombres de catálogo, no datos sensibles (RN-011: "los catálogos los consulta cualquier rol"), y así un rol con `empleados.gestionar` o `activos.gestionar` sin `configuracion.ver` puede llenar sus formularios. La respuesta incluye también `positions` y `companies` activos (004, D-001). Los listados y detalles de cada catálogo siguen exigiendo `configuracion.ver`.
 - **Alternatives**: `?available=1` en cada listado (cuatro requests, mezcla dos contratos).
 
 ## D-006 — Activar/desactivar

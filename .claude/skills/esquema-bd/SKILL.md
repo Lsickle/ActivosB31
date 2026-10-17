@@ -5,7 +5,7 @@ description: Esquema de la base de datos de ActivosB31 (PostgreSQL 17) en format
 
 # Esquema de base de datos — ActivosB31
 
-> **Estado**: migradas las tablas base, las de RBAC (001-rbac) y las de Configuración (002-modulo-configuracion); el resto de módulos está **pendiente de diseño** (ver `docs/modulos.md` y sus preguntas abiertas). Cada diseño se documenta aquí ANTES de escribir las migraciones, y el usuario lo aprueba.
+> **Estado**: migradas las tablas base, las de RBAC (001-rbac), las de Configuración (002-modulo-configuracion), las de Seguridad (003-seguridad-bitacora), las de Empleados (004-modulo-empleados), las de Activos (005-modulo-activos) y las de Inventario (006-modulo-inventario); el resto de módulos está **pendiente de diseño** (ver `docs/modulos.md` y sus preguntas abiertas). Cada diseño se documenta aquí ANTES de escribir las migraciones, y el usuario lo aprueba.
 
 ## Convenciones
 
@@ -19,16 +19,23 @@ description: Esquema de la base de datos de ActivosB31 (PostgreSQL 17) en format
 
 ```sql
 -- Autenticación (0001_01_01_000000_create_users_table
---   + 2026_10_17_200003_add_role_and_password_flags_to_users_table)
+--   + 2026_10_17_200003_add_role_and_password_flags_to_users_table
+--   + 2026_10_17_400000_add_lockout_columns_to_users_table
+--   + 2026_10_17_500003_add_employee_id_to_users_table)
 users(id, name, username, email NULL, email_verified_at NULL, password,
       role_id FK -> roles NOT NULL idx,                 -- un rol por usuario (RN-013)
+      employee_id FK -> employees NULL UNIQUE RESTRICT, -- vínculo opcional uno a uno (RN-015, 004)
       is_active bool DEFAULT true,
       must_change_password bool DEFAULT false,          -- contraseña temporal (RN-014)
-      last_login_at NULL, remember_token, timestamps,
+      last_login_at NULL,
+      failed_login_attempts smallint DEFAULT 0,         -- RN-034: fallos seguidos (003)
+      locked_until timestamptz NULL,                    -- RN-034: fin del bloqueo (003)
+      remember_token, timestamps,
       UNIQUE(lower(username)), UNIQUE(lower(email)) WHERE email IS NOT NULL,   -- FR-008
       CHECK (position('@' in username) = 0))            -- '@' reservado para el login por correo
-      -- username y email se guardan en minúsculas (mutators de User). Sin vínculo con
-      -- empleados por ahora (RN-015). No se borran: se desactivan.
+      -- username y email se guardan en minúsculas (mutators de User). No se borran:
+      -- se desactivan. employee_id se gestiona desde Usuarios (RN-015, T006 de 004): empleado activo
+      -- y libre; al editar se conserva el actual aunque esté inactivo; exige empleados.ver.
 password_reset_tokens(email PK, token, created_at)
 sessions(id PK, user_id NULL idx, ip_address, user_agent, payload, last_activity idx)
 
@@ -82,7 +89,9 @@ asset_types(id, asset_category_id FK -> asset_categories RESTRICT NOT NULL idx,
             name varchar(120), description varchar(500) NULL,
             tracking_mode varchar(20) CHECK IN ('serialized','quantity'),   -- RN-007 (App\Enums\TrackingMode)
             is_active bool DEFAULT true, timestamps,
-            UNIQUE(asset_category_id, lower(name)))           -- asset_types_category_name_lower_unique
+            min_stock integer NULL,                           -- RN-028 / D-008 de 005 (2026_10_17_600001)
+            UNIQUE(asset_category_id, lower(name)),           -- asset_types_category_name_lower_unique
+            CHECK asset_types_min_stock_check (min_stock IS NULL OR (min_stock >= 0 AND tracking_mode = 'quantity')))
 -- 2026_10_17_300002_create_location_types_table
 location_types(id, name varchar(120), description varchar(500) NULL,
                is_active bool DEFAULT true, timestamps,
@@ -95,88 +104,190 @@ locations(id, location_type_id FK -> location_types RESTRICT NOT NULL idx,
 ```
 
 Reglas asociadas:
-- `asset_types.tracking_mode` no se puede cambiar si el tipo ya tiene activos (FR-009; `AssetType::hasAssets()` devuelve `false` hasta que exista la tabla de activos).
+- `asset_types.tracking_mode` no se puede cambiar si el tipo ya tiene activos (FR-009; `AssetType::hasAssets()` consulta `assets` desde 005). Al pasar un tipo sin activos a serializado, su `min_stock` se pone en null.
 - Una categoría inactiva oculta sus tipos para registros nuevos (RN-003, scope `AssetType::available()`); no desactiva los tipos en cascada. Igual con tipos de ubicación inactivos y sus ubicaciones (`Location::available()`).
 - Precarga (RN-012, `ConfigurationSeeder`): categorías + tipos solo si `asset_categories` está vacía; tipos de ubicación solo si `location_types` está vacía (D-008). No se precargan ubicaciones.
-- La periodicidad de mantenimientos/vencimientos (RN-006) se diseña con el módulo de Activos; no está en estas tablas.
+- La periodicidad de mantenimientos/vencimientos (RN-006) vive en `asset_maintenance_plans` (005).
 
 RBAC: ver la sección "RBAC (feature 001-rbac)" en Tablas existentes.
+
+## Seguridad (feature 003-seguridad-bitacora, migrado 2026-10-17)
+
+```sql
+-- users + failed_login_attempts, locked_until (ver Tablas existentes)
+-- 2026_10_17_400001_create_security_events_table
+security_events(id, event varchar(50) idx,      -- App\Enums\SecurityEventType: login_succeeded, login_failed, logout,
+                                                -- account_locked, account_unlocked, user_created, user_updated,
+                                                -- user_status_changed, password_reset, password_changed, role_created,
+                                                -- role_updated, role_status_changed, role_permissions_updated,
+                                                -- settings_updated (B-5 de 005: PUT /api/settings con
+                                                --   metadata {changes:{expiry_alert_days:[antes, después]}})
+                actor_id FK -> users NULL idx,  -- quién lo hizo; NULL en login_failed y account_locked (no autenticado)
+                target_user_id FK -> users NULL idx, target_role_id FK -> roles NULL,
+                login_attempted varchar(255) NULL,  -- texto ingresado, solo en login_failed (D-005); nunca la contraseña
+                ip_address varchar(45) NULL, user_agent varchar(255) NULL,   -- recortado a 255
+                metadata jsonb NULL,            -- p. ej. {changes:{campo:[antes,después]}}, {added,removed}, {reason}
+                created_at timestamptz DEFAULT now() idx)   -- sin updated_at
+-- SOLO INSERCIÓN (D-002): función prevent_security_events_change() + triggers
+--   security_events_immutable_rows (BEFORE UPDATE OR DELETE, por fila) y
+--   security_events_immutable_truncate (BEFORE TRUNCATE, por sentencia).
+--   El modelo SecurityEvent también rechaza save() de existentes y delete().
+```
+
+Reglas asociadas:
+- RN-034 / D-003: `RegisterFailedLogin` incrementa con un solo `UPDATE ... RETURNING` (sin tocar la fila mientras está bloqueada; bloqueo vencido → reinicia en 1). Umbral y duración en `config('auth.lockout')` (5 / 15 min). Un ingreso exitoso o el desbloqueo ponen el contador en 0.
+- Las FK de `security_events` no tienen `ON DELETE`: los usuarios y roles no se borran; un `SET NULL` chocaría con el trigger.
+- La conexión `pgsql` fija `timezone = UTC` (igual que `app.timezone`) para las columnas `timestamptz`. Los filtros por día de la bitácora se interpretan en America/Bogota (D-006).
+
+## Empleados (feature 004-modulo-empleados, migrado 2026-10-17)
+
+Sin `softDeletes`: empleados, cargos y compañías no se borran, se desactivan (RN-021, RN-003); FK `RESTRICT`.
+
+```sql
+-- 2026_10_17_500000_create_positions_table
+positions(id, name varchar(120), description varchar(500) NULL, is_active bool DEFAULT true, timestamps,
+          UNIQUE(lower(name)))                         -- positions_name_lower_unique; cargos/rangos (RN-035)
+-- 2026_10_17_500001_create_companies_table
+companies(id, name varchar(120), description varchar(500) NULL, is_active bool DEFAULT true, timestamps,
+          UNIQUE(lower(name)))                         -- companies_name_lower_unique; compañías/turnos (RN-036)
+-- 2026_10_17_500002_create_employees_table
+employees(id, document_type varchar(5),                -- CHECK employees_document_type_check IN ('CC','CE','TI','PA','PPT')
+          document_number varchar(20),                  -- solo [A-Z0-9] en mayúsculas (D-002)
+          first_name varchar(80), last_name varchar(80),
+          position_id FK -> positions RESTRICT NOT NULL idx, company_id FK -> companies NULL RESTRICT idx,
+          phone varchar(30) NULL, email varchar(255) NULL, hire_date date NULL,
+          shirt_size varchar(10) NULL, pants_size varchar(10) NULL, boot_size varchar(10) NULL, glove_size varchar(10) NULL,
+          is_active bool DEFAULT true, timestamps,
+          UNIQUE(document_type, document_number),       -- employees_document_type_number_unique (FR-002)
+          INDEX(last_name, first_name, id))             -- orden del listado (FR-001)
+-- 2026_10_17_500003_add_employee_id_to_users_table: users.employee_id (ver Tablas existentes)
+-- 2026_10_17_500004_revoke_empleados_ver_from_consulta_role: migración de datos (RN-040, D-006)
+```
+
+Reglas asociadas:
+- RN-022: los datos de `employees` solo se exponen con `empleados.ver`; `GET /api/employees/options` (empleados.ver ∨ entregas.ver ∨ reportes.ver) devuelve solo id, nombre completo y cargo (D-004).
+- RN-035: `ConfigurationSeeder` precarga los 8 cargos solo si `positions` está vacía; `companies` no se precarga (RN-036).
+- RN-040: Consulta se precarga sin `empleados.ver`; la migración 500004 se lo quita una vez a las instalaciones existentes.
+- Ajuste al migrar: `companies.description` es `varchar(500)` como en los demás catálogos; índice compuesto para el orden del listado.
+
+## Activos (feature 005-modulo-activos, migrado 2026-10-17)
+
+Sin `softDeletes` (FR-001: los activos no se borran, se dan de baja). FK `RESTRICT`/sin `ON DELETE`.
+
+```sql
+-- 2026_10_17_600000_create_prevent_row_changes_function
+-- prevent_row_changes(): función plpgsql reutilizable para tablas de SOLO INSERCIÓN
+--   (RAISE 'La tabla % es de solo inserción (% rechazado).'). Cada tabla le conecta
+--   <tabla>_immutable_rows (BEFORE UPDATE OR DELETE, por fila) y
+--   <tabla>_immutable_truncate (BEFORE TRUNCATE, por sentencia). Reutilizarla en 006/007.
+-- 2026_10_17_600001_add_min_stock_to_asset_types_table: asset_types.min_stock (ver Configuración)
+-- 2026_10_17_600002_create_assets_table
+assets(id, asset_type_id FK -> asset_types RESTRICT idx,   -- solo tipos 'serialized' (RN-007, validado en la app)
+       plate varchar(50),                               -- RN-008 / D-006: recortada y en MAYÚSCULAS
+       serial varchar(100) NULL, brand varchar(80) NULL, model varchar(80) NULL,
+       acquisition_date date NULL, acquisition_value numeric(14,2) NULL, useful_life_months smallint NULL,
+       expires_on date NULL idx,                        -- RN-031
+       status varchar(20) DEFAULT 'available' idx,      -- RN-005 (App\Enums\AssetStatus)
+       location_id FK -> locations NULL RESTRICT idx,   -- dónde está
+       holder_employee_id FK -> employees NULL RESTRICT idx,  -- quién lo tiene (RN-039, lo fija Entregas)
+       photo_path varchar(255) NULL,                    -- disco ASSETS_DISK: assets/{id}/{uuid}.jpg
+       notes text NULL, timestamps,
+       UNIQUE(lower(plate)),                            -- assets_plate_lower_unique
+       CHECK assets_status_check (status IN ('available','assigned','maintenance','retired')),
+       CHECK assets_holder_status_check ((status = 'assigned') = (holder_employee_id IS NOT NULL)),
+       CHECK assets_acquisition_value_check (acquisition_value IS NULL OR acquisition_value >= 0),
+       CHECK assets_useful_life_months_check (useful_life_months IS NULL OR useful_life_months > 0))
+-- 2026_10_17_600003_create_asset_events_table — SOLO INSERCIÓN (triggers con prevent_row_changes())
+asset_events(id, asset_id FK, event varchar(30),        -- App\Enums\AssetEventType: created, updated, status_changed,
+                                                        -- location_changed, delivered, returned, maintenance_done, retired,
+                                                        -- maintenance_plan_created, maintenance_plan_updated (A-1, revisión
+                                                        -- de seguridad de 005: notes = nombre del plan; updated con changes)
+             from_status varchar(20) NULL, to_status varchar(20) NULL,
+             from_location_id FK -> locations NULL, to_location_id FK -> locations NULL,
+             employee_id FK -> employees NULL idx,
+             delivery_id bigint NULL idx,               -- sin FK hasta que 007 cree deliveries (agregarla allí)
+             user_id FK -> users, notes text NULL,      -- notes: motivo de baja/cambio de estado, descripción del mantenimiento
+             changes jsonb NULL,                        -- AJUSTE DE IMPLEMENTACIÓN: {campo:{from,to}} en 'updated' (D-002)
+             created_at timestamptz DEFAULT now(),      -- sin updated_at
+             INDEX(asset_id, created_at, id))
+-- 2026_10_17_600004_create_asset_maintenance_plans_table
+asset_maintenance_plans(id, asset_id FK idx, name varchar(120),       -- RN-029
+                        interval_months smallint CHECK > 0, last_done_on date NULL,
+                        next_due_on date idx,                          -- D-003: calculado al guardar (modelo)
+                        alert_days smallint DEFAULT 30 CHECK >= 0,     -- RN-030
+                        is_active bool DEFAULT true, timestamps)
+-- 2026_10_17_600005_create_asset_maintenance_records_table — SOLO INSERCIÓN (triggers con prevent_row_changes())
+asset_maintenance_records(id, asset_id FK, plan_id FK -> asset_maintenance_plans NULL idx,
+                          performed_on date, description varchar(500), performed_by varchar(120) NULL,
+                          cost numeric(14,2) NULL CHECK >= 0, user_id FK -> users,
+                          created_at timestamptz DEFAULT now(),         -- sin updated_at
+                          INDEX(asset_id, performed_on))
+-- 2026_10_17_600006_create_app_settings_table
+app_settings(key varchar(80) PK, value jsonb, updated_at)   -- expiry_alert_days (def. 30 en App\Models\AppSetting si no hay fila; RN-030)
+```
+
+Reglas asociadas:
+- D-001: estado y poseedor solo cambian con las acciones de `App\Actions\Activos` (manual: `ChangeAssetStatus`/`ChangeAssetLocation`; Entregas: `AssignAsset`/`ReleaseAsset`), con `SELECT ... FOR UPDATE` sobre la fila. Asignado o Dado de baja → no cambian estado ni ubicación (409).
+- D-003: `next_due_on = (last_done_on ?? fecha de creación en America/Bogota) + interval_months` sin desbordar el mes (`addMonthsNoOverflow`).
+- D-004: "hoy" en America/Bogota; alertas excluyen activos `retired`.
+- Ajustes al migrar (aprobados como ajustes de implementación): índices en `status`, `location_id`, `holder_employee_id`, `next_due_on`, `expires_on`, `asset_events(asset_id, created_at, id)`, `asset_events.employee_id/delivery_id`, `asset_maintenance_records(asset_id, performed_on)` y `plan_id`; CHECKs de estado/poseedor, valores ≥ 0 y periodicidad > 0; columna `asset_events.changes jsonb` (pedida por el contrato del frontend, D-002).
+
+## Inventario (feature 006-modulo-inventario, migrado 2026-10-17)
+
+Artículos por cantidad (RN-007). Sin `softDeletes`; FK `RESTRICT`/sin `ON DELETE`. Sin `created_at/updated_at` estándar (ver columnas).
+
+```sql
+-- 2026_10_17_700000_create_stock_levels_table
+stock_levels(asset_type_id FK -> asset_types RESTRICT, location_id FK -> locations RESTRICT idx,
+             quantity integer DEFAULT 0, updated_at timestamptz DEFAULT now(),
+             PRIMARY KEY(asset_type_id, location_id),
+             CHECK stock_levels_quantity_check (quantity >= 0))           -- FR-002, última defensa
+-- 2026_10_17_700001_create_inventory_counts_table
+inventory_counts(id, location_id FK -> locations RESTRICT idx,
+                 status varchar(20) DEFAULT 'open',                       -- App\Enums\CountStatus
+                 notes varchar(500) NULL,
+                 opened_by FK -> users, closed_by FK -> users NULL,
+                 opened_at timestamptz(6) DEFAULT now(), closed_at timestamptz(6) NULL,
+                 CHECK inventory_counts_status_check (status IN ('open','closed')),
+                 CHECK inventory_counts_closed_check ((status = 'closed') = (closed_at IS NOT NULL AND closed_by IS NOT NULL)),
+                 UNIQUE INDEX inventory_counts_one_open_per_location (location_id) WHERE status = 'open')   -- D-004
+-- 2026_10_17_700002_create_inventory_movements_table — SOLO INSERCIÓN (triggers con prevent_row_changes():
+--   inventory_movements_immutable_rows / inventory_movements_immutable_truncate)
+inventory_movements(id, type varchar(20),                -- App\Enums\MovementType
+                    asset_type_id FK -> asset_types idx, quantity integer,
+                    from_location_id FK -> locations NULL idx, to_location_id FK -> locations NULL idx,
+                    delivery_id bigint NULL idx,         -- sin FK hasta que 007 cree deliveries (agregarla allí)
+                    count_id FK -> inventory_counts NULL idx,   -- ajuste generado al cerrar un conteo (RN-027)
+                    reason varchar(500) NULL, user_id FK -> users,
+                    created_at timestamptz(6) DEFAULT now(),    -- sin updated_at
+                    INDEX(created_at, id),
+                    CHECK inventory_movements_type_check (type IN ('entry','exit','transfer','adjustment','delivery','return','loss')),
+                    CHECK inventory_movements_quantity_check (quantity > 0),
+                    CHECK inventory_movements_locations_check (   -- D-002
+                      entry/return: solo to; exit/delivery: solo from; transfer: ambas y distintas;
+                      adjustment: exactamente una; loss: ninguna))
+-- 2026_10_17_700003_create_inventory_count_lines_table
+inventory_count_lines(id, count_id FK -> inventory_counts,
+                      asset_type_id FK -> asset_types NULL,   -- en serializados guarda el tipo del activo
+                      asset_id FK -> assets NULL idx,
+                      expected_quantity integer NULL, counted_quantity integer NULL, found bool NULL,
+                      CHECK inventory_count_lines_kind_check (
+                        (asset_id IS NULL AND asset_type_id IS NOT NULL AND expected_quantity IS NOT NULL AND found IS NULL)
+                        OR (asset_id IS NOT NULL AND expected_quantity IS NULL AND counted_quantity IS NULL)),
+                      CHECK inventory_count_lines_quantities_check (expected/counted NULL o >= 0),
+                      UNIQUE INDEX inventory_count_lines_count_type_unique (count_id, asset_type_id) WHERE asset_id IS NULL,
+                      UNIQUE INDEX inventory_count_lines_count_asset_unique (count_id, asset_id) WHERE asset_id IS NOT NULL)
+```
+
+Reglas asociadas:
+- D-001: `stock_levels` e `inventory_movements` solo cambian con `App\Actions\Inventario\RecordStockMovement` (transacción, `INSERT ... ON CONFLICT DO NOTHING` + `SELECT ... FOR UPDATE` en orden `(asset_type_id, location_id)`). Quien registre varios movimientos en una transacción (007) debe llamarla en ese orden. SC-002: suma de movimientos = existencia.
+- D-003: entradas y traslados solo con tipos disponibles (activo, categoría activa) hacia ubicaciones disponibles; sacar desde ubicaciones inactivas sí se permite. Motivo obligatorio en salidas y ajustes.
+- D-004: al abrir un conteo se crean renglones de tipos por cantidad con existencia > 0 y de activos serializados en `available`/`maintenance` con esa ubicación. Al cerrar se recalcula lo esperado (con las existencias bloqueadas), se crean ajustes con `count_id` y los serializados sin marcar quedan `found = false` (RN-037: no cambian de estado).
+- Ajustes al migrar (de implementación): CHECKs de ubicaciones por clase, de estado de cierre y de clase de renglón; índices únicos parciales de renglones; índices en FKs y `(created_at, id)`; `notes varchar(500)`; `created_at/opened_at/closed_at` con precisión de microsegundos (para `changed_since_open`, US3-4); `stock_levels.updated_at timestamptz`.
 
 ## APROBADO por el usuario (2026-10-17) — pendiente de migrar
 
 > Aprobado completo (pregunta 17). Cada bloque pasa a "migrado" en el mismo cambio que su feature crea las migraciones. Ajustes menores de implementación (índices, longitudes) se documentan aquí al migrar.
-
-### 003 — Seguridad: bitácora y bloqueo (A-1, RN-034)
-
-```sql
-users + failed_login_attempts smallint DEFAULT 0, locked_until timestamptz NULL   -- RN-034: 5 fallos seguidos → 15 min
-security_events(id, event varchar(50),          -- login_succeeded, login_failed, account_locked, account_unlocked, logout,
-                                                -- user_created, user_updated, user_status_changed, password_reset, password_changed,
-                                                -- role_created, role_updated, role_status_changed, role_permissions_updated
-                actor_id FK -> users NULL,      -- quién lo hizo (NULL en login fallido de cuenta inexistente)
-                target_user_id FK -> users NULL, target_role_id FK -> roles NULL,
-                login_attempted varchar(255) NULL,  -- texto ingresado en login fallido
-                ip_address varchar(45) NULL, user_agent varchar(255) NULL,
-                metadata jsonb NULL,            -- p. ej. {from_role, to_role}, permisos agregados/quitados
-                created_at timestamptz idx)     -- SOLO INSERCIÓN: trigger que rechaza UPDATE/DELETE
-```
-
-### 004 — Empleados (RN-021, RN-022, RN-015)
-
-```sql
-positions(id, name varchar(120), description varchar(500) NULL, is_active, timestamps, UNIQUE(lower(name)))   -- cargos/rangos (Configuración)
-companies(id, name varchar(120), description NULL, is_active, timestamps, UNIQUE(lower(name)))               -- compañías/turnos (Configuración)
-employees(id, document_type varchar(5) CHECK IN ('CC','CE','TI','PA','PPT'), document_number varchar(20),
-          first_name varchar(80), last_name varchar(80),
-          position_id FK -> positions RESTRICT, company_id FK -> companies NULL RESTRICT,
-          phone varchar(30) NULL, email varchar(255) NULL, hire_date date NULL,
-          shirt_size varchar(10) NULL, pants_size varchar(10) NULL, boot_size varchar(10) NULL, glove_size varchar(10) NULL,
-          is_active bool DEFAULT true, timestamps,
-          UNIQUE(document_type, document_number))      -- no se borran: se desactivan
-users + employee_id FK -> employees NULL UNIQUE     -- vínculo opcional (RN-015)
-```
-
-### 005 — Activos, mantenimientos y vencimientos (RN-001, RN-005..RN-008, RN-029..RN-031)
-
-```sql
-assets(id, asset_type_id FK -> asset_types RESTRICT,   -- solo tipos 'serialized' (RN-007)
-       plate varchar(50), serial varchar(100) NULL,    -- RN-008: placa obligatoria y única (lower)
-       brand varchar(80) NULL, model varchar(80) NULL,
-       acquisition_date date NULL, acquisition_value numeric(14,2) NULL, useful_life_months smallint NULL,
-       expires_on date NULL,                           -- RN-031
-       status varchar(20) CHECK IN ('available','assigned','maintenance','retired') DEFAULT 'available',  -- RN-005
-       location_id FK -> locations NULL,               -- dónde está (bodega, vehículo…)
-       holder_employee_id FK -> employees NULL,        -- quién lo tiene (lo fija Entregas)
-       photo_path varchar(255) NULL,                   -- R2
-       notes text NULL, timestamps,
-       UNIQUE(lower(plate)))
-asset_events(id, asset_id FK, event varchar(30),       -- created, updated, status_changed, location_changed, delivered,
-                                                       -- returned, maintenance_done, retired  (historial, SOLO INSERCIÓN)
-             from_status NULL, to_status NULL, from_location_id NULL, to_location_id NULL,
-             employee_id NULL, delivery_id NULL, user_id FK -> users, notes text NULL, created_at)
-asset_maintenance_plans(id, asset_id FK, name varchar(120),          -- RN-029: por activo ("Prueba hidrostática")
-                        interval_months smallint, last_done_on date NULL, next_due_on date,
-                        alert_days smallint DEFAULT 30,              -- RN-030
-                        is_active, timestamps)
-asset_maintenance_records(id, asset_id FK, plan_id FK NULL, performed_on date, description varchar(500),
-                          performed_by varchar(120) NULL, cost numeric(14,2) NULL, user_id, created_at)   -- SOLO INSERCIÓN
-app_settings(key varchar(80) PK, value jsonb, updated_at)            -- expiry_alert_days = 30 (RN-030)
-asset_types + min_stock integer NULL                                 -- RN-028, solo tipos 'quantity'
-```
-
-### 006 — Inventario (RN-027, RN-028) — artículos por cantidad
-
-```sql
-stock_levels(asset_type_id FK, location_id FK, quantity integer CHECK >= 0, updated_at, PK(asset_type_id, location_id))
-inventory_movements(id, type varchar(20) CHECK IN ('entry','exit','transfer','adjustment','delivery','return','loss'),
-                    asset_type_id FK, quantity integer CHECK > 0,
-                    from_location_id NULL, to_location_id NULL,
-                    delivery_id NULL, count_id NULL, reason varchar(500) NULL, user_id, created_at)   -- SOLO INSERCIÓN
-inventory_counts(id, location_id FK, status CHECK IN ('open','closed'), notes NULL,
-                 opened_by FK users, closed_by FK users NULL, opened_at, closed_at NULL)
-inventory_count_lines(id, count_id FK, asset_type_id NULL, asset_id NULL,   -- cantidad: esperado/contado; serializado: encontrado
-                      expected_quantity integer NULL, counted_quantity integer NULL, found bool NULL)
-```
 
 ### 007 — Entregas (RN-023..RN-026)
 

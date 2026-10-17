@@ -96,10 +96,16 @@ class RoleSeeder extends Seeder
                     PermissionCode::EntregasGestionar,
                 ],
             ],
+            // RN-040: sin empleados.ver (datos personales, RN-022); se puede
+            // conceder desde la matriz. Las instalaciones previas lo pierden
+            // con la migración de datos 2026_10_17_500004 (D-006).
             Role::CONSULTA => [
                 'name' => 'Consulta',
-                'description' => 'Consulta todos los módulos sin modificar.',
-                'permissions' => $allView,
+                'description' => 'Consulta los módulos sin modificar; no ve los datos personales de los empleados.',
+                'permissions' => array_values(array_filter(
+                    $allView,
+                    fn (PermissionCode $permission) => $permission !== PermissionCode::EmpleadosVer,
+                )),
             ],
         ];
     }

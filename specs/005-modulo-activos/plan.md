@@ -9,7 +9,7 @@ Activos serializados (`assets`) con placa única, estados RN-005, ubicación y p
 ## Technical Context
 
 - Dependencias nuevas (verificadas en `docs/infraestructura.md`): `intervention/image ^4.4` + `intervention/image-laravel ^4.1.1` (driver GD); `league/flysystem-aws-s3-v3 ^3.35.3` para R2 (en local y tests se usa disco `local` privado).
-- Disco configurable `ASSETS_DISK` (def. `local`; producción `r2`). Fotos en `assets/{asset_id}/{uuid}.jpg`, máx. 1600 px de lado, JPEG calidad 82, sin metadatos. URLs con `temporaryUrl()` de 10 minutos (el disco local de Laravel 13 lo soporta con `serve => true`).
+- Disco configurable `ASSETS_DISK` (def. `local`; producción `r2`). Fotos en `assets/{asset_id}/{uuid}.jpg`, máx. 1600 px de lado, JPEG calidad 82, sin metadatos. URLs con `temporaryUrl()` de 10 minutos (el disco local de Laravel 13 lo soporta con `serve`, activado solo con `LOCAL_DISK_SERVE=true` en desarrollo y tests, M-3).
 - Inmutabilidad de `asset_events` y `asset_maintenance_records` con el mismo trigger plpgsql de 003 (función reutilizable `prevent_row_changes()`).
 
 ## Constitution Check
@@ -25,7 +25,7 @@ Activos serializados (`assets`) con placa única, estados RN-005, ubicación y p
 ## Decisiones
 
 - **D-001 Transiciones** (`App\Enums\AssetStatus`): manuales Disponible ⇄ En mantenimiento; Disponible/En mantenimiento → Dado de baja (motivo obligatorio, definitivo). `assigned` solo desde Entregas (007) mediante una acción `AssignAsset`/`ReleaseAsset` que este módulo expone. Ubicación y estado no se cambian si está Asignado (409).
-- **D-002 Historial**: acción `RecordAssetEvent` en la misma transacción; eventos `created`, `updated` (`{changes}`), `status_changed`, `location_changed`, `maintenance_done`, `retired`, (`delivered`, `returned` desde 007).
+- **D-002 Historial**: acción `RecordAssetEvent` en la misma transacción; eventos `created`, `updated` (`{changes}`), `status_changed`, `location_changed`, `maintenance_done`, `retired`, `maintenance_plan_created` (notes = nombre del plan) y `maintenance_plan_updated` (`{changes}` de name, interval_months, last_done_on, alert_days, is_active; notes = nombre del plan; sin cambios efectivos no hay evento) (A-1 de la revisión de seguridad), (`delivered`, `returned` desde 007).
 - **D-003 Próximo mantenimiento**: `next_due_on = (last_done_on ?? fecha de creación del plan) + interval_months`, recalculado al registrar un mantenimiento (si su fecha es posterior al último) y al editar el plan.
 - **D-004 Alertas**: `GET /api/assets/alerts` → `maintenance` (planes activos de activos no dados de baja con `next_due_on <= hoy + alert_days`) y `expirations` (`expires_on <= hoy + expiry_alert_days`), cada uno con `overdue` bool. Hoy en `America/Bogota`.
 - **D-005 Ajustes**: `app_settings` con `expiry_alert_days` (def. 30). `GET/PUT /api/settings` — ver con `configuracion.ver`, cambiar con `configuracion.gestionar`.

@@ -63,4 +63,13 @@ describe('LoginForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Credenciales inválidas.')
     expect(replace).not.toHaveBeenCalled()
   })
+
+  // RN-034 / FR-002 (003-seguridad-bitacora): aviso fijo, sin revelar si una cuenta está bloqueada.
+  it('avisa siempre que varios intentos fallidos bloquean la cuenta', () => {
+    render(<LoginForm />)
+
+    expect(
+      screen.getByText('Por seguridad, varios intentos fallidos seguidos bloquean la cuenta durante 15 minutos.')
+    ).toBeInTheDocument()
+  })
 })

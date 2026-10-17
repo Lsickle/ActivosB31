@@ -15,10 +15,11 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
- * Persona que inicia sesión. Independiente de Empleado por ahora (RN-015).
+ * Persona que inicia sesión. Puede vincularse opcionalmente con un empleado,
+ * uno a uno (RN-015, D-005 de 004).
  * Tiene exactamente un rol (RN-013).
  */
-#[Fillable(['name', 'username', 'email', 'password', 'is_active', 'role_id'])]
+#[Fillable(['name', 'username', 'email', 'password', 'is_active', 'role_id', 'employee_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -47,7 +48,17 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
             'last_login_at' => 'datetime',
+            'failed_login_attempts' => 'integer',
+            'locked_until' => 'datetime',
         ];
+    }
+
+    /**
+     * RN-034: la cuenta está bloqueada mientras `locked_until` no haya pasado.
+     */
+    public function isLocked(): bool
+    {
+        return $this->locked_until !== null && $this->locked_until->isFuture();
     }
 
     /**
@@ -56,6 +67,16 @@ class User extends Authenticatable
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    /**
+     * RN-015: empleado vinculado (opcional, único por usuario).
+     *
+     * @return BelongsTo<Employee, $this>
+     */
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
     }
 
     /**

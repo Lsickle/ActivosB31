@@ -114,4 +114,19 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Bloqueo por intentos fallidos (RN-034, D-008)
+    |--------------------------------------------------------------------------
+    |
+    | 5 fallos seguidos bloquean la cuenta 15 minutos. Sin variables de
+    | entorno: los valores los fija la regla de negocio RN-034.
+    |
+    */
+
+    'lockout' => [
+        'max_attempts' => 5,
+        'minutes' => 15,
+    ],
+
 ];

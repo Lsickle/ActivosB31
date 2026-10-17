@@ -8,6 +8,7 @@ import { UsersTab } from './UsersTab'
 const listUsers = vi.fn()
 const listRoles = vi.fn()
 const updateUserStatus = vi.fn()
+const unlockUser = vi.fn()
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
 const can = vi.fn()
@@ -17,6 +18,10 @@ vi.mock('app/features/usuarios/api', async (importOriginal) => ({
   listUsers: (...args: unknown[]) => listUsers(...args),
   listRoles: (...args: unknown[]) => listRoles(...args),
   updateUserStatus: (...args: unknown[]) => updateUserStatus(...args),
+  unlockUser: (...args: unknown[]) => unlockUser(...args),
+}))
+vi.mock('app/features/empleados/api', () => ({
+  employeesOptions: () => Promise.resolve({ data: [] }),
 }))
 vi.mock('app/provider/auth', () => ({
   useCan: (code: string) => can(code),
@@ -41,6 +46,8 @@ function user(overrides: Partial<UserRecord>): UserRecord {
     last_login_at: '2026-10-17T14:30:00Z',
     role: { id: 1, name: 'Administrador', code: 'admin' },
     created_at: '2026-10-17T10:00:00Z',
+    locked_until: null,
+    employee: null,
     ...overrides,
   }
 }
@@ -191,5 +198,74 @@ describe('UsersTab (US2, FR-007)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Restablecer contraseña de Juan Pérez' }))
     expect(await screen.findByRole('dialog', { name: 'Restablecer contraseña' })).toBeInTheDocument()
+  })
+
+  // RN-034 / FR-004 (003-seguridad-bitacora): estado de bloqueo y desbloqueo.
+  it('muestra el empleado vinculado debajo del nombre (RN-015)', async () => {
+    listUsers.mockResolvedValue(page([user({ id: 9, name: 'Juan Pérez', username: 'jperez', employee: { id: 4, full_name: 'Juan A. Pérez Gómez' } })]))
+    render(<UsersTab />)
+
+    const row = (await screen.findByText('Juan Pérez')).closest('tr')!
+    expect(within(row).getByText('Empleado: Juan A. Pérez Gómez')).toBeInTheDocument()
+  })
+
+  describe('bloqueo por intentos fallidos (RN-034)', () => {
+    const lockedUntil = new Date(Date.now() + 10 * 60_000).toISOString()
+    const expectedTime = new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(
+      new Date(lockedUntil)
+    )
+    const lockedUsers = [
+      users[0],
+      user({ id: 9, name: 'Juan Pérez', username: 'jperez', role: null, locked_until: lockedUntil }),
+      user({ id: 11, name: 'Pedro Vencido', username: 'pedro', role: null, locked_until: new Date(Date.now() - 60_000).toISOString() }),
+    ]
+
+    beforeEach(() => {
+      listUsers.mockResolvedValue(page(lockedUsers))
+    })
+
+    it('muestra "Bloqueada hasta HH:MM" solo si el bloqueo es futuro', async () => {
+      render(<UsersTab />)
+
+      const juan = await screen.findByRole('row', { name: /Juan Pérez/ })
+      expect(within(juan).getByText(`Bloqueada hasta ${expectedTime}`)).toBeInTheDocument()
+      expect(within(screen.getByRole('row', { name: /Pedro Vencido/ })).queryByText(/Bloqueada/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Desbloquear Pedro Vencido' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Desbloquear Administrador' })).not.toBeInTheDocument()
+    })
+
+    it('desbloquea tras confirmar, avisa y recarga (FR-004)', async () => {
+      unlockUser.mockResolvedValue({ data: { ...lockedUsers[1], locked_until: null } })
+      render(<UsersTab />)
+      await screen.findByRole('row', { name: /Juan Pérez/ })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Desbloquear Juan Pérez' }))
+      const confirm = await screen.findByRole('alertdialog')
+      await userEvent.click(within(confirm).getByRole('button', { name: 'Desbloquear' }))
+
+      expect(unlockUser).toHaveBeenCalledWith(9)
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Cuenta jperez desbloqueada.'))
+      expect(listUsers).toHaveBeenCalledTimes(2)
+    })
+
+    it('muestra el error si el desbloqueo falla', async () => {
+      unlockUser.mockRejectedValue(new ApiError('Acción no autorizada.', 403))
+      render(<UsersTab />)
+      await screen.findByRole('row', { name: /Juan Pérez/ })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Desbloquear Juan Pérez' }))
+      await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Desbloquear' }))
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('Acción no autorizada.'))
+    })
+
+    it('sin "usuarios.gestionar" ve la insignia pero no la acción', async () => {
+      can.mockReturnValue(false)
+      render(<UsersTab />)
+
+      const juan = await screen.findByRole('row', { name: /Juan Pérez/ })
+      expect(within(juan).getByText(`Bloqueada hasta ${expectedTime}`)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Desbloquear/ })).not.toBeInTheDocument()
+    })
   })
 })

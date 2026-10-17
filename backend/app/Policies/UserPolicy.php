@@ -33,6 +33,15 @@ class UserPolicy
         return $user->hasPermission(Permission::UsuariosGestionar);
     }
 
+    /**
+     * RN-015 / RN-022: asignar o cambiar el empleado vinculado expone datos de
+     * Empleados, así que exige además empleados.ver.
+     */
+    public function linkEmployee(User $user): bool
+    {
+        return $user->hasPermission(Permission::EmpleadosVer);
+    }
+
     public function updateStatus(User $user, User $model): bool
     {
         return $user->hasPermission(Permission::UsuariosGestionar);

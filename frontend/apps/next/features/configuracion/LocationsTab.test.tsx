@@ -51,6 +51,8 @@ const options: ConfigurationOptions = {
     { id: 2, name: 'Vehículo' },
   ],
   locations: [],
+  positions: [],
+  companies: [],
 }
 
 const locations = [location({}), location({ id: 2, name: 'Recepción', location_type: { id: 4, name: 'Oficina', is_active: false } })]

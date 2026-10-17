@@ -3,8 +3,10 @@
 use App\Enums\TrackingMode;
 use App\Models\AssetCategory;
 use App\Models\AssetType;
+use App\Models\Company;
 use App\Models\Location;
 use App\Models\LocationType;
+use App\Models\Position;
 
 it('FR-010 / SC-005: devuelve solo opciones disponibles, ordenadas por nombre y sin paginar', function () {
     actingAsRole('consulta');
@@ -27,6 +29,13 @@ it('FR-010 / SC-005: devuelve solo opciones disponibles, ordenadas por nombre y 
     Location::factory()->for($bodega, 'locationType')->inactive()->create(['name' => 'Bodega vieja']);
     Location::factory()->for($oficina, 'locationType')->create(['name' => 'Recepción']);
 
+    // 004 (D-001): cargos y compañías activos.
+    $teniente = Position::factory()->create(['name' => 'Teniente']);
+    $bombero = Position::factory()->create(['name' => 'Bombero']);
+    Position::factory()->inactive()->create(['name' => 'Cabo']);
+    $turnoA = Company::factory()->create(['name' => 'Turno A']);
+    Company::factory()->inactive()->create(['name' => 'Turno B']);
+
     $this->getJson('/api/configuracion/options')
         ->assertOk()
         ->assertExactJson(['data' => [
@@ -46,6 +55,13 @@ it('FR-010 / SC-005: devuelve solo opciones disponibles, ordenadas por nombre y 
                 ['id' => $principal->id, 'name' => 'Bodega principal', 'location_type_id' => $bodega->id],
                 ['id' => $maquina->id, 'name' => 'Máquina 1', 'location_type_id' => $vehiculo->id],
             ],
+            'positions' => [
+                ['id' => $bombero->id, 'name' => 'Bombero'],
+                ['id' => $teniente->id, 'name' => 'Teniente'],
+            ],
+            'companies' => [
+                ['id' => $turnoA->id, 'name' => 'Turno A'],
+            ],
         ]]);
 });
 
@@ -54,15 +70,30 @@ it('devuelve listas vacías si no hay catálogos', function () {
 
     $this->getJson('/api/configuracion/options')
         ->assertOk()
-        ->assertExactJson(['data' => ['asset_categories' => [], 'asset_types' => [], 'location_types' => [], 'locations' => []]]);
+        ->assertExactJson(['data' => ['asset_categories' => [], 'asset_types' => [], 'location_types' => [], 'locations' => [], 'positions' => [], 'companies' => []]]);
 });
 
-it('D-005 / RN-011: requiere configuracion.ver', function () {
+it('D-005 (resuelto 2026-10-17) / RN-011: lo lee cualquier usuario con algún permiso de ver', function (array $permissions) {
+    actingWithPermissions($permissions);
+
+    $this->getJson('/api/configuracion/options')->assertOk();
+})->with([
+    'configuración' => [['configuracion.ver']],
+    'activos' => [['activos.ver', 'activos.gestionar']],
+    'empleados' => [['empleados.ver', 'empleados.gestionar']],
+    'reportes' => [['reportes.ver']],
+    'usuarios' => [['usuarios.ver']],
+]);
+
+it('D-005 / RN-011: 401 sin sesión y 403 sin ningún permiso', function () {
     $this->getJson('/api/configuracion/options')->assertUnauthorized();
 
-    actingWithPermissions(['activos.ver', 'activos.gestionar']);
+    actingWithPermissions([]);
     $this->getJson('/api/configuracion/options')->assertForbidden();
+});
 
-    actingWithPermissions(['configuracion.ver']);
-    $this->getJson('/api/configuracion/options')->assertOk();
+it('D-005: un usuario desactivado no lo lee', function () {
+    actingAsRole('admin', ['is_active' => false]);
+
+    $this->getJson('/api/configuracion/options')->assertForbidden();
 });

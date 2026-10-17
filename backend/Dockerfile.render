@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     postgresql-dev \
     libpng-dev \
     libjpeg-turbo-dev \
+    libwebp-dev \
     freetype-dev \
     libzip-dev \
     zip \
@@ -20,8 +21,11 @@ RUN apk add --no-cache \
     icu-dev \
     $PHPIZE_DEPS
 
-# Instalar extensiones de PHP requeridas por Laravel + PostgreSQL
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+# Instalar extensiones de PHP requeridas por Laravel + PostgreSQL. GD con
+# WebP (M-2): las fotos de activos aceptan JPEG, PNG y WebP (FR-008). exif:
+# Intervention lo usa para orientar las fotos de celular antes de quitarles
+# los metadatos.
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install \
         pdo \
         pdo_pgsql \
@@ -29,7 +33,12 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         zip \
         gd \
         mbstring \
-        intl
+        intl \
+        exif
+
+# php.ini de producción (M-1): memory_limit y límites de subida acordes a
+# las fotos de activos (4 MB, 24 Mpx).
+COPY docker/php-production.ini $PHP_INI_DIR/conf.d/zz-activosb31.ini
 
 # Copiar ejecutable oficial de Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

@@ -11,12 +11,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Tipo de activo (FR-002): pertenece a una categoría y define el modo de
- * control serializado o por cantidad (RN-007).
+ * control serializado o por cantidad (RN-007). Los tipos por cantidad tienen
+ * stock mínimo opcional (RN-028, D-008 de 005).
  */
-#[Fillable(['asset_category_id', 'name', 'description', 'tracking_mode'])]
+#[Fillable(['asset_category_id', 'name', 'description', 'tracking_mode', 'min_stock'])]
 class AssetType extends Model
 {
     /** @use HasFactory<AssetTypeFactory> */
@@ -37,6 +39,7 @@ class AssetType extends Model
         return [
             'is_active' => 'boolean',
             'tracking_mode' => TrackingMode::class,
+            'min_stock' => 'integer',
         ];
     }
 
@@ -46,6 +49,16 @@ class AssetType extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(AssetCategory::class, 'asset_category_id');
+    }
+
+    /**
+     * Activos serializados de este tipo (005).
+     *
+     * @return HasMany<Asset, $this>
+     */
+    public function assets(): HasMany
+    {
+        return $this->hasMany(Asset::class);
     }
 
     /**
@@ -62,10 +75,10 @@ class AssetType extends Model
 
     /**
      * FR-009 (D-009): el modo de control no cambia si el tipo ya tiene
-     * activos. Sin efecto hasta que exista el registro de activos.
+     * activos (activado por 005).
      */
     public function hasAssets(): bool
     {
-        return false;
+        return $this->assets()->exists();
     }
 }

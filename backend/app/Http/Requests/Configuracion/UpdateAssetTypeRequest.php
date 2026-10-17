@@ -37,6 +37,19 @@ class UpdateAssetTypeRequest extends FormRequest
         if ($this->has('asset_category_id') && ! $this->has('name')) {
             $this->merge(['name' => $this->assetType()->name]);
         }
+
+        // D-008 (005): un tipo que pasa a serializado pierde su stock mínimo.
+        if (! $this->has('min_stock') && $this->assetType()->min_stock !== null && $this->trackingMode() !== TrackingMode::Quantity->value) {
+            $this->merge(['min_stock' => null]);
+        }
+    }
+
+    /**
+     * Modo de control resultante: el enviado o el actual.
+     */
+    private function trackingMode(): mixed
+    {
+        return $this->has('tracking_mode') ? $this->input('tracking_mode') : $this->assetType()->tracking_mode->value;
     }
 
     /**
@@ -67,6 +80,7 @@ class UpdateAssetTypeRequest extends FormRequest
                     }
                 },
             ],
+            'min_stock' => ['sometimes', ...StoreAssetTypeRequest::minStockRules($this->trackingMode())],
         ];
     }
 

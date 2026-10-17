@@ -32,7 +32,7 @@ it('precarga Administrador, Almacenista y Consulta como roles del sistema (RN-01
     ]);
 });
 
-it('asigna los permisos iniciales de cada rol (FR-003, RN-010, RN-011)', function () {
+it('asigna los permisos iniciales de cada rol (FR-003, RN-010, RN-011, RN-040)', function () {
     seedRbac();
 
     expect(roleCodes('admin'))->toEqualCanonicalizing(PermissionCode::values())
@@ -43,7 +43,8 @@ it('asigna los permisos iniciales de cada rol (FR-003, RN-010, RN-011)', functio
             'empleados.ver', 'reportes.ver', 'configuracion.ver', 'usuarios.ver',
         ])
         ->and(roleCodes('consulta'))->toEqualCanonicalizing([
-            'activos.ver', 'inventario.ver', 'entregas.ver', 'empleados.ver',
+            // RN-040: Consulta no tiene empleados.ver en la precarga.
+            'activos.ver', 'inventario.ver', 'entregas.ver',
             'reportes.ver', 'configuracion.ver', 'usuarios.ver',
         ]);
 });

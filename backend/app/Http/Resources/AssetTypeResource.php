@@ -22,6 +22,8 @@ class AssetTypeResource extends JsonResource
             'description' => $this->description,
             'tracking_mode' => $this->tracking_mode->value,
             'tracking_mode_label' => $this->tracking_mode->label(),
+            // RN-028 / D-008 (005): solo en tipos por cantidad.
+            'min_stock' => $this->min_stock,
             'is_active' => $this->is_active,
             // US2-4: se informa el estado de la categoría para señalar los
             // tipos no disponibles por tener la categoría inactiva.

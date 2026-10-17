@@ -18,8 +18,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Render y Vercel terminan TLS en su proxy: confiar en X-Forwarded-*.
-        $middleware->trustProxies(at: '*');
+        // A-1 (revisión de seguridad de 003, D-009). SUPUESTO POR VERIFICAR en el
+        // primer despliegue: Render termina TLS en su proxy y
+        // agrega la IP real al final de X-Forwarded-For. Se confía solo en el
+        // salto inmediato (REMOTE_ADDR): la IP del cliente es el último valor
+        // que agregó ese proxy, no el primero, que el cliente puede inventar.
+        // Con '*' cualquiera falsificaba la IP de la bitácora y evadía el
+        // rate limiting por IP. Si se agrega otro proxy delante (p. ej. el
+        // rewrite de Vercel), revisar cuántos saltos hay que confiar.
+        $middleware->trustProxies(at: 'REMOTE_ADDR');
 
         // Sanctum: sesión por cookie para el SPA web (dominios en
         // SANCTUM_STATEFUL_DOMAINS).

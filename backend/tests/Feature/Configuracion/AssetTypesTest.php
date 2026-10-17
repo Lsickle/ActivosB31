@@ -1,12 +1,10 @@
 <?php
 
 use App\Enums\TrackingMode;
+use App\Models\Asset;
 use App\Models\AssetCategory;
 use App\Models\AssetType;
-use App\Policies\AssetTypePolicy;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Route;
 
 describe('listado', function () {
     it('FR-013: pagina y ordena por nombre, con su categoría y modo de control', function () {
@@ -189,20 +187,8 @@ describe('edición', function () {
     it('FR-009 / D-009: no permite cambiar el modo de control si el tipo ya tiene activos', function () {
         actingAsRole('admin');
         $type = AssetType::factory()->create(['tracking_mode' => TrackingMode::Serialized]);
-
-        // Doble de prueba: mismo registro, pero con activos registrados.
-        $withAssets = new class extends AssetType
-        {
-            protected $table = 'asset_types';
-
-            public function hasAssets(): bool
-            {
-                return true;
-            }
-        };
-        $bound = $withAssets->newFromBuilder($type->getAttributes());
-        Gate::policy($withAssets::class, AssetTypePolicy::class);
-        Route::bind('asset_type', fn () => $bound);
+        // 005 activa FR-009: AssetType::hasAssets() consulta la tabla de activos.
+        Asset::factory()->for($type, 'assetType')->create();
 
         $this->patchJson("/api/asset-types/{$type->id}", ['tracking_mode' => 'quantity'])
             ->assertUnprocessable()
@@ -244,5 +230,53 @@ describe('estado y autorización', function () {
         $this->postJson('/api/asset-types', [])->assertForbidden();
         $this->patchJson("/api/asset-types/{$type->id}", ['name' => 'X'])->assertForbidden();
         $this->patchJson("/api/asset-types/{$type->id}/status", ['is_active' => false])->assertForbidden();
+    });
+});
+
+describe('stock mínimo (RN-028, D-008 de 005)', function () {
+    it('un tipo por cantidad tiene stock mínimo opcional (entero ≥ 0)', function () {
+        actingAsRole('admin');
+        $epp = AssetCategory::factory()->create();
+
+        $id = $this->postJson('/api/asset-types', ['asset_category_id' => $epp->id, 'name' => 'Guantes', 'tracking_mode' => 'quantity', 'min_stock' => 10])
+            ->assertCreated()
+            ->assertJsonPath('data.min_stock', 10)
+            ->json('data.id');
+
+        $this->patchJson("/api/asset-types/{$id}", ['min_stock' => 0])->assertOk()->assertJsonPath('data.min_stock', 0);
+        $this->patchJson("/api/asset-types/{$id}", ['min_stock' => null])->assertOk()->assertJsonPath('data.min_stock', null);
+        $this->getJson("/api/asset-types/{$id}")->assertJsonPath('data.min_stock', null);
+
+        $this->patchJson("/api/asset-types/{$id}", ['min_stock' => -1])->assertJsonValidationErrors('min_stock');
+        $this->patchJson("/api/asset-types/{$id}", ['min_stock' => 2.5])->assertJsonValidationErrors('min_stock');
+    });
+
+    it('D-008: un tipo serializado acepta stock mínimo nulo y rechaza un valor', function () {
+        actingAsRole('admin');
+        $epp = AssetCategory::factory()->create();
+
+        $this->postJson('/api/asset-types', ['asset_category_id' => $epp->id, 'name' => 'Casco', 'tracking_mode' => 'serialized', 'min_stock' => 5])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.min_stock.0', 'El stock mínimo solo aplica a tipos por cantidad.');
+
+        $id = $this->postJson('/api/asset-types', ['asset_category_id' => $epp->id, 'name' => 'Casco', 'tracking_mode' => 'serialized', 'min_stock' => null])
+            ->assertCreated()
+            ->assertJsonPath('data.min_stock', null)
+            ->json('data.id');
+
+        $this->patchJson("/api/asset-types/{$id}", ['min_stock' => 3])
+            ->assertJsonPath('errors.min_stock.0', 'El stock mínimo solo aplica a tipos por cantidad.');
+        $this->patchJson("/api/asset-types/{$id}", ['tracking_mode' => 'quantity', 'min_stock' => 3])
+            ->assertOk()
+            ->assertJsonPath('data.min_stock', 3);
+    });
+
+    it('D-008: pasar un tipo sin activos a serializado borra su stock mínimo', function () {
+        actingAsRole('admin');
+        $type = AssetType::factory()->create(['tracking_mode' => TrackingMode::Quantity, 'min_stock' => 8]);
+
+        $this->patchJson("/api/asset-types/{$type->id}", ['tracking_mode' => 'serialized'])
+            ->assertOk()
+            ->assertJsonPath('data.min_stock', null);
     });
 });

@@ -58,6 +58,10 @@ jobs:
       - name: Instalar dependencias
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      # Avisos de seguridad conocidos en las dependencias (Packagist/GitHub).
+      - name: Auditoría de dependencias
+        run: composer audit --no-interaction
+
       - name: Preparar entorno
         run: |
           cp .env.example .env

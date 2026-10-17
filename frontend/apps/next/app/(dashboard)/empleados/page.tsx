@@ -1,7 +1,8 @@
-import { ModulePlaceholder } from '@/components/module-placeholder'
+import { EmpleadosScreen } from '@/features/empleados/EmpleadosScreen'
 
 export const metadata = { title: 'Empleados' }
 
+// spec 004: EmpleadosScreen exige empleados.ver (RN-022) con useRequireAuth.
 export default function EmpleadosPage() {
-  return <ModulePlaceholder permission="empleados.ver" title="Empleados" description="Personal de la estación al que se le asignan activos." />
+  return <EmpleadosScreen />
 }

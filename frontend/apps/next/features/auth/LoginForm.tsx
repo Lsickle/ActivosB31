@@ -79,6 +79,10 @@ export function LoginForm() {
             {isSubmitting ? 'Ingresando…' : 'Ingresar'}
           </Button>
         </form>
+        {/* RN-034 / FR-002: aviso fijo; el error nunca revela si la cuenta está bloqueada. */}
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Por seguridad, varios intentos fallidos seguidos bloquean la cuenta durante 15 minutos.
+        </p>
       </CardContent>
     </Card>
   )

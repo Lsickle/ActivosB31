@@ -4,7 +4,9 @@ import {
   ApiValidationError,
   PASSWORD_CHANGE_REQUIRED,
   RateLimitError,
+  apiDownload,
   apiFetch,
+  filenameFromContentDisposition,
   onAuthError,
 } from './api-client'
 
@@ -29,6 +31,23 @@ describe('apiFetch', () => {
     const [, init] = fetchMock.mock.calls[1]!
     expect(init.credentials).toBe('include')
     expect(init.headers['X-XSRF-TOKEN']).toBe('abc=')
+  })
+
+  it('con FormData (multipart, 005 fotos) no fija Content-Type y conserva CSRF y credenciales', async () => {
+    document.cookie = 'XSRF-TOKEN=tok'
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(jsonResponse(201, { data: {} }))
+    vi.stubGlobal('fetch', fetchMock)
+    const body = new FormData()
+    body.append('plate', 'B31-0001')
+
+    await apiFetch('/api/assets', { method: 'POST', body })
+
+    const [, init] = fetchMock.mock.calls[1]!
+    expect(init.body).toBe(body)
+    expect(init.credentials).toBe('include')
+    expect(init.headers['Content-Type']).toBeUndefined()
+    expect(init.headers.Accept).toBe('application/json')
+    expect(init.headers['X-XSRF-TOKEN']).toBe('tok')
   })
 
   it('convierte un 422 en ApiValidationError', async () => {
@@ -122,5 +141,90 @@ describe('apiFetch', () => {
     expect(error.status).toBe(403)
     expect(listener).toHaveBeenCalledWith('forbidden')
     expect(listener).not.toHaveBeenCalledWith('password_change_required')
+  })
+})
+
+// 008 D-002 (RN-032): descarga de reportes en Excel/PDF con la misma sesión y CSRF.
+describe('apiDownload', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  })
+
+  it('pide el archivo con credenciales y X-XSRF-TOKEN y devuelve Blob + nombre de Content-Disposition', async () => {
+    document.cookie = 'XSRF-TOKEN=tok'
+    const fileResponse = new Response('xlsx-bytes', {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="inventario-2026-10-17.xlsx"',
+      },
+    })
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(fileResponse)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = await apiDownload('/api/reports/inventory?format=xlsx')
+
+    expect(fetchMock.mock.calls[0]![0]).toMatch(/\/sanctum\/csrf-cookie$/)
+    const [url, init] = fetchMock.mock.calls[1]!
+    expect(url).toMatch(/\/api\/reports\/inventory\?format=xlsx$/)
+    expect(init.credentials).toBe('include')
+    expect(init.headers['X-XSRF-TOKEN']).toBe('tok')
+    expect(init.headers.Accept).toBe('application/json')
+    expect(file.filename).toBe('inventario-2026-10-17.xlsx')
+    expect(await file.blob.text()).toBe('xlsx-bytes')
+  })
+
+  it('sin Content-Disposition devuelve filename null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response('pdf', { status: 200 }))
+    )
+
+    const file = await apiDownload('/api/reports/inventory?format=pdf')
+
+    expect(file.filename).toBeNull()
+  })
+
+  it('un error responde igual que apiFetch: 422 → ApiValidationError, 403 → ApiError y aviso al listener', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(null, { status: 204 }))
+        .mockResolvedValueOnce(jsonResponse(422, { message: 'Inválido', errors: { to: ['Rango inválido.'] } }))
+        .mockResolvedValueOnce(new Response(null, { status: 204 }))
+        .mockResolvedValueOnce(jsonResponse(403, { message: 'Acceso denegado.' }))
+    )
+    const listener = vi.fn()
+    const unsubscribe = onAuthError(listener)
+
+    const validation = await apiDownload('/api/reports/employees/1?format=pdf').catch((e) => e)
+    expect(validation).toBeInstanceOf(ApiValidationError)
+    expect(validation.firstError('to')).toBe('Rango inválido.')
+
+    const forbidden = await apiDownload('/api/reports/employees/1?format=pdf').catch((e) => e)
+    expect(forbidden).toBeInstanceOf(ApiError)
+    expect(forbidden.status).toBe(403)
+    expect(forbidden.message).toBe('Acceso denegado.')
+    expect(listener).toHaveBeenCalledWith('forbidden')
+    unsubscribe()
+  })
+})
+
+describe('filenameFromContentDisposition', () => {
+  it('lee filename entre comillas, sin comillas y filename* (RFC 5987, prioridad)', () => {
+    expect(filenameFromContentDisposition('attachment; filename="reporte.pdf"')).toBe('reporte.pdf')
+    expect(filenameFromContentDisposition('attachment; filename=reporte.xlsx')).toBe('reporte.xlsx')
+    expect(
+      filenameFromContentDisposition(`attachment; filename="empleado.pdf"; filename*=UTF-8''empleado-P%C3%A9rez-2026-10-17.pdf`)
+    ).toBe('empleado-Pérez-2026-10-17.pdf')
+  })
+
+  it('descarta rutas y devuelve null si no hay nombre', () => {
+    expect(filenameFromContentDisposition('attachment; filename="../../etc/passwd"')).toBe('passwd')
+    expect(filenameFromContentDisposition('attachment; filename="C:\\\\temp\\\\reporte.pdf"')).toBe('reporte.pdf')
+    expect(filenameFromContentDisposition('attachment')).toBeNull()
+    expect(filenameFromContentDisposition(null)).toBeNull()
   })
 })

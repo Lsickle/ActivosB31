@@ -17,6 +17,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Disco de fotos de activos (005, FR-008)
+    |--------------------------------------------------------------------------
+    |
+    | Privado siempre: las fotos se entregan con URLs temporales. "local" en
+    | desarrollo y tests (servido con URLs firmadas); "r2" en producción.
+    |
+    */
+
+    'assets_disk' => env('ASSETS_DISK', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -33,7 +45,11 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            'visibility' => 'private',
+            // FR-008: sirve los archivos solo con URL firmada (temporaryUrl).
+            // M-3 (revisión de seguridad de 005): apagado salvo que se pida
+            // (desarrollo y tests); en producción las fotos van a R2.
+            'serve' => (bool) env('LOCAL_DISK_SERVE', false),
             'throw' => false,
             'report' => false,
         ],
@@ -57,6 +73,24 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
+            'report' => false,
+        ],
+
+        // Cloudflare R2 (docs/infraestructura.md): bucket privado, fotos con
+        // temporaryUrl(). aws-sdk-php >= 3.337 calcula checksums CRC32 por
+        // defecto y R2 no los admite: solo cuando la operación lo exige.
+        'r2' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => 'auto',
+            'bucket' => env('R2_BUCKET'),
+            'endpoint' => env('R2_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'request_checksum_calculation' => 'when_required',
+            'response_checksum_validation' => 'when_required',
+            'visibility' => 'private',
+            'throw' => true,
             'report' => false,
         ],
 

@@ -90,7 +90,7 @@ En Configuración, los tipos de activo **por cantidad** tienen un campo opcional
 - Cambiar el modo de control de un tipo con activos: se rechaza (FR-009 de 002, que ahora se activa).
 - Placa con espacios: se recortan; se guarda en mayúsculas.
 - Valor de adquisición negativo, fecha de adquisición futura, vida útil ≤ 0: se rechazan.
-- Foto: JPEG, PNG o WebP, máximo 5 MB; reemplazar la foto borra el archivo anterior.
+- Foto: JPEG, PNG o WebP, máximo 4 MB (límite del proxy de Vercel; antes 5 MB, cambiado por la revisión de seguridad M-1) y 24 megapíxeles; reemplazar la foto borra el archivo anterior.
 - Mover un activo a una ubicación inactiva: no se ofrece.
 - Activo en un tipo que luego se desactiva: conserva su tipo; se sigue viendo con la indicación.
 

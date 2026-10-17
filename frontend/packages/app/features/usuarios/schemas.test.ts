@@ -47,6 +47,21 @@ describe('userCreateSchema (FR-008, FR-009, FR-010)', () => {
   })
 })
 
+describe('employee_id (RN-015, 004 D-005)', () => {
+  it('es opcional: si no viene, no aparece en el resultado', () => {
+    expect(userCreateSchema.parse(validUser)).not.toHaveProperty('employee_id')
+  })
+
+  it('acepta un id de empleado o null (desvincular)', () => {
+    expect(userCreateSchema.parse({ ...validUser, employee_id: 4 }).employee_id).toBe(4)
+    expect(userUpdateSchema.parse({ ...validUser, employee_id: null }).employee_id).toBeNull()
+  })
+
+  it('rechaza ids no válidos', () => {
+    expect(userUpdateSchema.safeParse({ ...validUser, employee_id: 0 }).success).toBe(false)
+  })
+})
+
 describe('userUpdateSchema', () => {
   it('no pide contraseña', () => {
     const { password: _p, password_confirmation: _c, ...rest } = validUser
