@@ -102,9 +102,9 @@ Reglas asociadas:
 
 RBAC: ver la sección "RBAC (feature 001-rbac)" en Tablas existentes.
 
-## PROPUESTA — pendiente de aprobación del usuario (2026-10-17)
+## APROBADO por el usuario (2026-10-17) — pendiente de migrar
 
-> No migrar nada de esta sección hasta que el usuario la apruebe. Al aprobarse, cada bloque pasa a "migrado" con su feature.
+> Aprobado completo (pregunta 17). Cada bloque pasa a "migrado" en el mismo cambio que su feature crea las migraciones. Ajustes menores de implementación (índices, longitudes) se documentan aquí al migrar.
 
 ### 003 — Seguridad: bitácora y bloqueo (A-1, RN-034)
 

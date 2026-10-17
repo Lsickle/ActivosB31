@@ -12,4 +12,4 @@ Verificado con `stack-advisor` el 2026-10-17 (fuentes: Packagist, npm, documenta
 | Fotos | Sin librería por ahora: `image|mimes:jpeg,png,webp|max:5120|dimensions:max_width=6000,max_height=6000` | — | EXIF con GPS (Ley 1581): si se decide quitarlo, `intervention/image ^4.4` + `intervention/image-laravel ^4.1.1` con GD. |
 | CI | `actions/checkout@v7`, `actions/cache@v6`, `actions/setup-node@v7`, `shivammathur/setup-php@v2` | — | Corren en Node 24. |
 
-Decisiones pendientes con el usuario: respaldos de Neon (`pg_dump` propio vs plan de pago), re-codificar fotos para quitar EXIF.
+Decidido por el usuario (2026-10-17): respaldo diario con `pg_dump` a R2; fotos re-codificadas con Intervention Image v4 (sin EXIF, ~1600 px).

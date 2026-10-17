@@ -128,7 +128,14 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-033** — Los reportes admiten **filtro por rango de fechas**. (usuario, 2026-10-17)
 - **RN-034** — **Bloqueo de cuenta**: 5 intentos fallidos seguidos bloquean la cuenta 15 minutos; el Administrador puede desbloquearla. (usuario, 2026-10-17)
 
-Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `stack-advisor` antes de fijar): archivos (fotos, firmas) en **Cloudflare R2**; base de datos de producción en **Neon**.
+- **RN-035** — Cargos/rangos precargados (editables): **Comandante, Capitán, Teniente, Subteniente, Sargento, Cabo, Bombero, Administrativo**. (usuario, 2026-10-17)
+- **RN-036** — Las **compañías/turnos** son un catálogo administrable en Configuración, sin precarga. (usuario, 2026-10-17)
+- **RN-037** — En un conteo físico, el activo serializado no encontrado **solo se reporta**; su estado no cambia automáticamente. (usuario, 2026-10-17)
+- **RN-038** — Los artículos por cantidad devueltos **dañados o perdidos no vuelven al stock**: se registran como pérdida. (usuario, 2026-10-17)
+- **RN-039** — Al entregar un activo serializado pasa a **Asignado**, registra **quién lo tiene** y **conserva su última ubicación**. (usuario, 2026-10-17)
+- **RN-040** — El rol **Consulta no tiene `empleados.ver`** en la precarga (RN-022); se puede conceder desde la matriz. (usuario, 2026-10-17)
+
+Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `stack-advisor` antes de fijar): archivos (fotos, firmas) en **Cloudflare R2**; base de datos de producción en **Neon** con **copia diaria (`pg_dump`) a R2**; las fotos se **re-codifican al subirlas** (sin EXIF/GPS, ~1600 px). Detalle en `docs/infraestructura.md`.
 
 Riesgos aceptados por el usuario (2026-10-17): Almacenista y Consulta conservan `usuarios.ver` con los datos completos de las cuentas (hallazgo M-4, Ley 1581); se puede retirar desde la matriz. La bitácora de seguridad (A-1) se hará como feature aparte **antes de cargar datos reales**, junto con el bloqueo por intentos fallidos.
 
