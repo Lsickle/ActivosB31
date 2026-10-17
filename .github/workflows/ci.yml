@@ -40,16 +40,16 @@ jobs:
       DB_PASSWORD: password
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, pgsql, mbstring, intl, bcmath, redis
+          extensions: pdo_pgsql, pgsql, mbstring, intl, bcmath, redis, gd, zip
           coverage: none
 
       - name: Cache de Composer
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.composer/cache
           key: composer-${{ hashFiles('backend/composer.lock') }}
@@ -85,10 +85,10 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # La version de Yarn (4.7.0) viene fijada por `yarnPath` en .yarnrc.yml.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
