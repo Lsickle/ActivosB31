@@ -39,6 +39,19 @@ describe('LoginForm', () => {
     expect(replace).toHaveBeenCalledWith('/')
   })
 
+  // RN-014 / FR-009: con contraseña temporal solo puede cambiarla.
+  it('lleva a /cambiar-contrasena si el usuario debe cambiar la contraseña', async () => {
+    login.mockResolvedValue({ user: { must_change_password: true } })
+    render(<LoginForm />)
+
+    await userEvent.type(screen.getByLabelText('Usuario o correo'), 'consulta1')
+    await userEvent.type(screen.getByLabelText('Contraseña'), 'Temporal123')
+    await userEvent.click(screen.getByRole('button', { name: 'Ingresar' }))
+
+    expect(replace).toHaveBeenCalledWith('/cambiar-contrasena')
+    expect(replace).not.toHaveBeenCalledWith('/')
+  })
+
   it('muestra el error de credenciales del backend', async () => {
     login.mockRejectedValue(new ApiValidationError('Inválido', { login: ['Credenciales inválidas.'] }))
     render(<LoginForm />)

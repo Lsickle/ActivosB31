@@ -24,6 +24,42 @@ export class ApiValidationError extends Error {
   }
 }
 
+// Cualquier otra respuesta no-OK. Sigue siendo un Error con el `message` del
+// backend (compatible con los `catch` que solo leen `err.message`), y además
+// expone `status` (p. ej. 409 de invariantes) y el `code` opcional del body.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+// D-004 (RN-014): 403 que el middleware `password.changed` devuelve mientras
+// el usuario tenga la contraseña temporal pendiente de cambio.
+export const PASSWORD_CHANGE_REQUIRED = 'password_change_required'
+
+// 'forbidden' = 403 sin code: p. ej. un permiso retirado a mitad de sesión (B-7).
+export type AuthErrorKind = 'unauthenticated' | 'password_change_required' | 'forbidden'
+
+// El cliente no conoce el router ni el estado de sesión: el AuthProvider se
+// suscribe aquí para reaccionar (volver al login, ir a /cambiar-contrasena).
+const authErrorListeners = new Set<(kind: AuthErrorKind) => void>()
+
+export function onAuthError(listener: (kind: AuthErrorKind) => void): () => void {
+  authErrorListeners.add(listener)
+  return () => {
+    authErrorListeners.delete(listener)
+  }
+}
+
+function notifyAuthError(kind: AuthErrorKind): void {
+  authErrorListeners.forEach((listener) => listener(kind))
+}
+
 const DEFAULT_RETRY_AFTER_SECONDS = 60
 
 export class RateLimitError extends Error {
@@ -87,7 +123,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   if (!response.ok) {
-    throw new Error(body?.message ?? `Error inesperado (${response.status}).`)
+    const code = typeof body?.code === 'string' ? body.code : undefined
+    if (response.status === 401) {
+      notifyAuthError('unauthenticated')
+    } else if (response.status === 403) {
+      notifyAuthError(code === PASSWORD_CHANGE_REQUIRED ? 'password_change_required' : 'forbidden')
+    }
+    throw new ApiError(body?.message ?? `Error inesperado (${response.status}).`, response.status, code)
   }
 
   return body as T

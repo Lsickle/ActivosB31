@@ -1,7 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { EllipsisVerticalIcon, LogOutIcon } from 'lucide-react'
+import { EllipsisVerticalIcon, KeyRoundIcon, LogOutIcon } from 'lucide-react'
+import { CHANGE_PASSWORD_PATH } from 'app/features/auth/paths'
 import { useAuth } from 'app/provider/auth'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -43,11 +44,15 @@ export function NavUser() {
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              <span className="truncate text-xs text-muted-foreground">{user.email ?? user.username}</span>
             </div>
             <EllipsisVerticalIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="min-w-56" side={isMobile ? 'bottom' : 'right'} align="end" sideOffset={4}>
+            <DropdownMenuItem onClick={() => router.push(CHANGE_PASSWORD_PATH)}>
+              <KeyRoundIcon />
+              Cambiar contraseña
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout}>
               <LogOutIcon />
               Cerrar sesión

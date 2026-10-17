@@ -18,7 +18,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { useAuth } from 'app/provider/auth'
-import { navItems } from '@/config/sidebar-nav'
+import { navItems, visibleNavItems } from '@/config/sidebar-nav'
 
 function isActive(url: string, pathname: string): boolean {
   return url === '/' ? pathname === '/' : pathname === url || pathname.startsWith(`${url}/`)
@@ -27,8 +27,7 @@ function isActive(url: string, pathname: string): boolean {
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { user } = useAuth()
-  const permissions = user?.permissions ?? []
-  const visibleItems = navItems.filter((item) => !item.permission || permissions.includes(item.permission))
+  const visibleItems = visibleNavItems(navItems, user?.permissions ?? [])
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>

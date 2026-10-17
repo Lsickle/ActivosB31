@@ -6,6 +6,7 @@ import { FlameIcon } from 'lucide-react'
 import { login } from 'app/features/auth/api'
 import { loginSchema } from 'app/features/auth/schemas'
 import { ApiValidationError, RateLimitError } from 'app/lib/api-client'
+import { CHANGE_PASSWORD_PATH } from 'app/features/auth/paths'
 import { useAuth } from 'app/provider/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,9 +36,10 @@ export function LoginForm() {
 
     setIsSubmitting(true)
     try {
-      await login(parsed.data)
+      const { user } = await login(parsed.data)
       await refresh()
-      router.replace('/')
+      // RN-014: con contraseña temporal lo único permitido es cambiarla.
+      router.replace(user?.must_change_password ? CHANGE_PASSWORD_PATH : '/')
     } catch (err) {
       if (err instanceof ApiValidationError) {
         setError(err.firstError('login') ?? err.message)

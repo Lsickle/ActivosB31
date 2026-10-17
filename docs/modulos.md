@@ -107,3 +107,11 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-013** — Cada usuario tiene **exactamente un rol**. (usuario, 2026-10-17)
 - **RN-014** — El Administrador asigna una **contraseña temporal** al crear un usuario o al restablecerla; el usuario **debe cambiarla** en su siguiente ingreso. La recuperación por correo queda para cuando se defina el servicio de correo. (usuario, 2026-10-17)
 - **RN-015** — Usuarios y empleados son independientes en esta etapa; cuando exista el módulo Empleados se agrega un **vínculo opcional** usuario → empleado. (usuario, 2026-10-17)
+- **RN-016** — El conteo de usuarios de un rol considera **solo usuarios activos** (el mismo criterio que impide desactivar un rol en uso). (usuario, 2026-10-17)
+- **RN-017** — Un usuario cuyo rol fue desactivado **puede editarse conservando ese rol**; lo que no se permite es asignar un rol inactivo a un usuario que no lo tenía. (usuario, 2026-10-17)
+- **RN-018** — Un usuario **no puede restablecer su propia contraseña** desde la gestión de usuarios; debe usar "Cambiar contraseña" (con su contraseña actual). (usuario, 2026-10-17)
+- **RN-019** — El permiso **gestionar Usuarios y roles** (usuarios, roles, matriz y contraseñas de otros) es **exclusivo del rol Administrador**: no se puede conceder a otros roles desde la matriz. (usuario, 2026-10-17, a partir del hallazgo H-1 de la revisión de seguridad)
+- **RN-020** — Los roles precargados (Administrador, Almacenista, Consulta) **no se pueden renombrar**; solo se edita su descripción. (usuario, 2026-10-17)
+
+Riesgos aceptados por el usuario (2026-10-17): Almacenista y Consulta conservan `usuarios.ver` con los datos completos de las cuentas (hallazgo M-4, Ley 1581); se puede retirar desde la matriz. La bitácora de seguridad (A-1) se hará como feature aparte **antes de cargar datos reales**, junto con el bloqueo por intentos fallidos.
+

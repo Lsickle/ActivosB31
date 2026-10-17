@@ -106,14 +106,18 @@ yarn typecheck
 
 Construido y probado:
 - **Backend**: login (`POST /api/login`, usuario o correo, sin distinguir mayúsculas; cookie web o token Bearer de 14 días si se manda `device_name`), `POST /api/logout`, `GET /api/user`, CSRF de Sanctum activo en todo `/api`, middleware `active` que bloquea cuentas desactivadas, rate limiting de login (10/min por IP+cuenta, 30/min por IP), CORS con credenciales para `FRONTEND_URL`. 16 tests Pest en verde.
-- **Frontend**: pantalla de login, layout autenticado con sidebar de los 7 módulos (placeholders) y cierre de sesión. 6 tests Vitest en verde, typecheck limpio. Flujo verificado en navegador contra el backend local.
+- **Frontend**: pantalla de login, layout autenticado con sidebar de los 7 módulos (placeholders) y cierre de sesión.
+- **Feature 001-rbac** (`specs/001-rbac/`, RN-009..RN-020): roles (Administrador, Almacenista, Consulta precargados; un rol por usuario en `users.role_id`), 13 permisos `<modulo>.ver|gestionar` en `App\Enums\Permission`, matriz rol × módulo, gestión de usuarios y roles (sin borrado), contraseña temporal con cambio obligatorio (middleware `password.changed`), revocación de sesiones/tokens, sidebar y acciones filtradas por permisos (`useCan`, "Acceso denegado"). `usuarios.gestionar` es exclusivo del Administrador (RN-019); no hay `Gate::before`. 124 tests Pest y 96 Vitest en verde; quickstart verificado en navegador (Playwright).
+- Repo en GitHub: `Lsickle/ActivosB31` (público), CI en verde. Identidad git local del repo: `LSickle`.
+- Spec 002 (Configuración) escrita y con datos iniciales confirmados; falta plan, tareas e implementación.
 
 Siguiente paso sugerido:
-1. Revisar con el usuario las preguntas abiertas de `docs/modulos.md` y el prototipo de v0.
-2. Diseñar el esquema en `esquema-bd` y aprobarlo.
-3. Módulo **Configuración** (categorías, tipos 1:N, ubicaciones): es la base de Activos.
-4. **RBAC** (roles, permisos, Policies), luego Empleados, Activos, Inventario, Entregas y Reportes.
-5. Conectar GitHub (cuenta nueva) para que corra el CI; después, primer despliegue en Render y Vercel.
+1. `/speckit-plan` → `/speckit-tasks` → implementar **002-modulo-configuracion** (`specs/002-modulo-configuracion/`), protegida con `configuracion.ver` / `configuracion.gestionar`.
+2. Feature de seguridad antes de datos reales: bitácora de seguridad (A-1) + bloqueo por intentos fallidos.
+3. Resolver preguntas abiertas de Empleados, Entregas e Inventario (`docs/modulos.md`); luego Activos (incluye mantenimientos RN-006), Inventario, Entregas y Reportes.
+4. Primer despliegue en Render y Vercel.
+
+Detalles conocidos: la matriz con 4+ roles desborda en horizontal la página en pantallas angostas (debería desplazarse dentro de la tabla); no hay `favicon.ico`.
 
 ---
 
@@ -129,8 +133,13 @@ Ya corregido: login CSRF (se quitó la exención de `api/login`), enumeración p
 Pendiente:
 1. **En el primer deploy**: confirmar qué IP ve Laravel detrás del proxy de Vercel (registrar temporalmente `$request->ip()` y `X-Forwarded-For`). Si es la IP de Vercel, el rate limit de 30/min por IP sería compartido por todos los usuarios: agregar un `middleware.ts` en Next que reenvíe la IP del cliente con un secreto compartido, validado en el backend.
 2. **Antes de datos reales**: reemplazar `php artisan serve` en `Dockerfile.render` por un servidor de producción (FrankenPHP/Octane o nginx + php-fpm; verificar con `stack-advisor`), cachear config/rutas al arrancar y sacar el seeding del arranque (o usar un `AdminUserSeeder` dedicado).
-3. **Con el módulo de usuarios**: índices únicos sobre `lower(username)` y `lower(email)`, normalizar a minúsculas al guardar, prohibir `@` en el username; bloqueo por intentos, cambio/recuperación de contraseña, bitácora de autenticación; programar `sanctum:prune-expired`.
+3. **Antes de datos reales (feature aparte)**: bitácora de seguridad de solo inserción (quién crea usuarios, cambia roles, restablece contraseñas, edita la matriz; login/logout) y bloqueo por intentos fallidos. Recuperación de contraseña por correo cuando se defina el servicio de correo.
 4. No conectar *preview deployments* de Vercel al backend real sin agregarlos explícitamente a CORS/Sanctum (nada de comodines).
+5. **En Render**: el scheduler (`sanctum:prune-expired` diario en `routes/console.php`) necesita un cron job o worker. `SESSION_DRIVER=database` es requisito: la revocación de sesiones borra filas de `sessions`.
+6. Riesgo aceptado por el usuario (M-4, Ley 1581): Almacenista y Consulta tienen `usuarios.ver` con correo y último ingreso; se puede retirar desde la matriz.
+7. Menores pendientes (revisión 001-rbac): carrera entre desactivar un rol y asignarlo a un usuario (falla cerrado: el usuario queda sin permisos); reactivar un usuario con rol inactivo; si existe el username `admin` sin rol Administrador y no hay ningún admin, el seeder falla con mensaje claro en vez de promoverlo.
+
+Corregido en 001-rbac: índices `lower()` y normalización de username/email, `@` prohibido en username, cambio de contraseña, `sanctum:prune-expired` programado, escalada vía `usuarios.gestionar` (RN-019), reset de la propia contraseña (RN-018), seeder del admin por rol (no por username) y admin inicial con cambio obligatorio, sin `Gate::before`, throttle en cambio de contraseña, rotación de `remember_token`, duplicados en carrera → 422, cabeceras anti-clickjacking en Next.
 
 ---
 

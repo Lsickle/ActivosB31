@@ -18,10 +18,8 @@ use Laravel\Sanctum\PersonalAccessToken;
  * mismo endpoint de login decide el modo según si el cliente manda
  * `device_name` (móvil) o no (web).
  *
- * Pendiente (siguiente hito, ver CLAUDE.md "Orden de arranque"): bloqueo por
- * intentos fallidos, historial de contraseñas, cambio de contraseña y
- * bitácora de seguridad — no se inventan umbrales aquí sin reglas de negocio
- * confirmadas.
+ * Pendiente (feature posterior): bloqueo por intentos fallidos y bitácora de
+ * autenticación — no se inventan umbrales sin reglas de negocio confirmadas.
  */
 class AuthController extends Controller
 {
@@ -102,12 +100,18 @@ class AuthController extends Controller
     }
 
     /**
+     * Usuario actual con su rol y permisos efectivos (FR-014): la interfaz
+     * los usa para adaptar menú y acciones; el servidor los vuelve a
+     * verificar en cada operación (FR-015).
+     *
      * @return array<string, mixed>
      */
     private function userPayload(User $user): array
     {
-        // `permissions` queda vacío hasta implementar el módulo de usuarios,
-        // roles y permisos — el frontend ya lo consume para ocultar menús.
-        return $user->only(['id', 'name', 'username', 'email']) + ['permissions' => []];
+        return $user->only(['id', 'name', 'username', 'email']) + [
+            'role' => $user->role?->only(['id', 'code', 'name']),
+            'permissions' => $user->permissionCodes(),
+            'must_change_password' => $user->must_change_password,
+        ];
     }
 }

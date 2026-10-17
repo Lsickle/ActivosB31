@@ -82,11 +82,28 @@ async function proxyRewrites() {
   ]
 }
 
+// B-6 (revisión de seguridad): la app no se puede incrustar en iframes
+// (clickjacking), sin sniffing de MIME y sin filtrar rutas en el Referer.
+async function securityHeaders() {
+  return [
+    {
+      source: '/:path*',
+      headers: [
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'same-origin' },
+      ],
+    },
+  ]
+}
+
 /**
  * @type {import('next').NextConfig}
  */
 module.exports = {
   rewrites: proxyRewrites,
+  headers: securityHeaders,
   transpilePackages: ['react-native', 'react-native-web', 'solito'],
 
   compiler: {
