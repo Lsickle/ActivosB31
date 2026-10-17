@@ -28,9 +28,9 @@ Equipos, herramientas, EPP, vehículos y demás bienes de la estación.
 
 Preguntas abiertas:
 - ~~¿Serializados o por cantidad?~~ → **Ambos** (RN-001, 2026-10-17).
-- Campos obligatorios: ¿placa de inventario, serial, marca, modelo, fecha de adquisición, valor, vida útil, foto?
-- Estados del activo: ¿disponible, asignado, en mantenimiento, dañado, dado de baja?
-- ¿Se requieren mantenimientos o vencimientos (p. ej. prueba hidrostática de cilindros, vencimiento de EPP)?
+- Campos del activo serializado: confirmados **marca, modelo, fecha de adquisición, valor (vida útil opcional) y foto** (2026-10-17). Placa y serial **solo aplican a los serializados**; los artículos por cantidad (guantes, etc.) no los llevan (usuario, 2026-10-17). La naturaleza la define el **tipo de activo** (RN-007) y en los serializados la placa es obligatoria y única, el serial opcional (RN-008). La foto depende de decidir el almacenamiento de archivos.
+- ~~Estados del activo~~ → **Disponible, Asignado, En mantenimiento, Dado de baja** (RN-005, 2026-10-17).
+- ~~¿Mantenimientos o vencimientos?~~ → **Sí, desde el alcance inicial**, con alertas (RN-006, 2026-10-17). Pendiente detallar: qué se programa (por tipo de activo o por activo), periodicidad y anticipación de la alerta.
 
 ## 3. Empleados
 
@@ -82,7 +82,7 @@ Parametrizaciones administrables desde la aplicación:
 - **Ubicaciones**.
 
 Preguntas abiertas:
-- ~~¿Ubicaciones jerárquicas?~~ → **Lista plana, cada ubicación con un tipo** (RN-002, 2026-10-17). Pendiente: ¿los tipos de ubicación son una lista fija o un catálogo administrable?
+- ~~¿Ubicaciones jerárquicas?~~ → **Lista plana, cada ubicación con un tipo** (RN-002, 2026-10-17). Tipos de ubicación: **catálogo administrable** (RN-004, 2026-10-17).
 - ~~¿Desactivar/borrar categorías con datos?~~ → **Solo desactivar** (RN-003, 2026-10-17).
 
 ---
@@ -94,3 +94,8 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-001** — La estación controla dos naturalezas de activo: **serializados** (cada unidad identificable con placa/serial: cilindros, equipos, vehículos) y **por cantidad** (artículos con existencias: guantes, uniformes, consumibles). (usuario, 2026-10-17)
 - **RN-002** — Las ubicaciones son una **lista plana** (sin jerarquía); cada ubicación tiene un **tipo** (p. ej. bodega, vehículo, oficina). (usuario, 2026-10-17)
 - **RN-003** — Categorías y tipos de activo **no se borran** si tienen datos asociados; solo se **desactivan**. Una categoría inactiva oculta sus tipos para registros nuevos, pero se conserva el historial. (usuario, 2026-10-17)
+- **RN-004** — Los tipos de ubicación son un **catálogo administrable** desde Configuración (crear, editar, desactivar). (usuario, 2026-10-17)
+- **RN-005** — Estados de un activo serializado: **Disponible, Asignado, En mantenimiento, Dado de baja**. (usuario, 2026-10-17)
+- **RN-006** — El sistema controla **mantenimientos y vencimientos** desde el alcance inicial (p. ej. prueba hidrostática, vencimiento de EPP), con alertas de próximos a vencer. (usuario, 2026-10-17)
+- **RN-007** — La naturaleza de control (**serializado** o **por cantidad**) la define el **tipo de activo**; todos los artículos de un tipo siguen esa regla. (usuario, 2026-10-17)
+- **RN-008** — En los activos serializados la **placa de inventario es obligatoria y única**; el **serial del fabricante es opcional**. Los artículos por cantidad no llevan placa ni serial. (usuario, 2026-10-17)
