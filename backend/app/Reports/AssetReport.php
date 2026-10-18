@@ -61,6 +61,16 @@ class AssetReport extends Report
         return 'reporte-activo';
     }
 
+    public function key(): string
+    {
+        return 'asset';
+    }
+
+    public function subjectId(): int
+    {
+        return $this->asset->id;
+    }
+
     protected function filters(): array
     {
         return $this->range->filters();

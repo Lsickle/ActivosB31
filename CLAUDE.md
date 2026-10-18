@@ -106,19 +106,26 @@ yarn typecheck
 
 Construido y probado:
 - **Backend**: login (`POST /api/login`, usuario o correo, sin distinguir mayúsculas; cookie web o token Bearer de 14 días si se manda `device_name`), `POST /api/logout`, `GET /api/user`, CSRF de Sanctum activo en todo `/api`, middleware `active` que bloquea cuentas desactivadas, rate limiting de login (10/min por IP+cuenta, 30/min por IP), CORS con credenciales para `FRONTEND_URL`. 16 tests Pest en verde.
-- **Frontend**: pantalla de login, layout autenticado con sidebar de los 7 módulos (placeholders) y cierre de sesión.
+- **Frontend**: login, layout autenticado con sidebar filtrado por permisos y las pantallas de los 7 módulos más Inicio.
 - **Feature 001-rbac** (`specs/001-rbac/`, RN-009..RN-020): roles (Administrador, Almacenista, Consulta precargados; un rol por usuario en `users.role_id`), 13 permisos `<modulo>.ver|gestionar` en `App\Enums\Permission`, matriz rol × módulo, gestión de usuarios y roles (sin borrado), contraseña temporal con cambio obligatorio (middleware `password.changed`), revocación de sesiones/tokens, sidebar y acciones filtradas por permisos (`useCan`, "Acceso denegado"). `usuarios.gestionar` es exclusivo del Administrador (RN-019); no hay `Gate::before`. 124 tests Pest y 96 Vitest en verde; quickstart verificado en navegador (Playwright).
 - Repo en GitHub: `Lsickle/ActivosB31` (público), CI en verde. Identidad git local del repo: `LSickle`.
 - **Feature 002-modulo-configuracion** (`specs/002-modulo-configuracion/`, RN-002..RN-004, RN-007, RN-011, RN-012): categorías, tipos de activo (modo serializado/por cantidad), tipos de ubicación y ubicaciones; CRUD sin borrado, búsqueda sin tildes, opciones disponibles en `GET /api/configuracion/options`, precarga (9 categorías, 34 tipos, 4 tipos de ubicación) solo si la tabla está vacía. 211 tests Pest y 145 Vitest en verde; quickstart verificado en navegador.
-- Reglas RN-021..RN-034 confirmadas (empleados, entregas, inventario, mantenimientos, reportes, bloqueo de cuenta) e infraestructura elegida: Cloudflare R2 para archivos y Neon para PostgreSQL de producción (verificar con `stack-advisor` antes de fijar).
+- **Features 003 a 008** (`specs/003..008`), todas con TDD, revisión de `especialista-seguridad` aplicada y verificación en navegador contra el backend real:
+  - 003 seguridad: bitácora inmutable (`security_events`, trigger), bloqueo 5 fallos / 15 min (RN-034), desbloqueo por UI y `php artisan security:unlock`, IP con `trustProxies('REMOTE_ADDR')`.
+  - 004 empleados (RN-021, RN-022, RN-035, RN-036, RN-040): cargos y compañías en Configuración, vínculo usuario-empleado (RN-015); Consulta sin `empleados.ver`.
+  - 005 activos (RN-005..RN-008, RN-029..RN-031, RN-039): estados, historial inmutable, fotos re-codificadas sin EXIF (≤4 MB, disco `ASSETS_DISK`, R2 en producción), planes de mantenimiento por activo, vencimientos, alertas, `app_settings`.
+  - 006 inventario (RN-027, RN-028, RN-037, RN-038): existencias, movimientos inmutables (`RecordStockMovement` es la única vía), conteos físicos, stock mínimo.
+  - 007 entregas (RN-023..RN-026): consecutivo ENT-, firma PNG con huella SHA-256, devoluciones con estado, tenencias, alertas de préstamos vencidos.
+  - 008 reportes (RN-032, RN-033): inventario, por empleado y por artículo en JSON/Excel/PDF; tablero de Inicio con alertas por permiso; exportaciones en la bitácora.
+  - Suites: 797 tests Pest y 438 Vitest en verde. Librerías verificadas en `docs/infraestructura.md`.
+- **Preguntas pendientes del usuario 26 a 36**: tabla al final de `docs/modulos.md` (33A ya implementada de forma provisional).
 
 Siguiente paso sugerido:
-1. Feature de seguridad antes de datos reales: bitácora de seguridad (A-1) + bloqueo por intentos fallidos (RN-034).
-2. Empleados (RN-021, RN-022), Activos (RN-001, RN-005..RN-008, RN-029..RN-031), Inventario (RN-027, RN-028), Entregas (RN-023..RN-026) y Reportes (RN-032, RN-033).
-3. Primer despliegue en Render y Vercel.
+1. Resolver las preguntas 26 a 36 y aplicar lo que cambie.
+2. Pendientes de seguridad "antes de datos reales" (abajo) y servidor de producción en lugar de `php artisan serve`.
+3. Primer despliegue: Neon (`aws-us-east-1`), Render (Virginia), R2 (bucket de fotos y otro de respaldos), Vercel. Requiere las cuentas del usuario.
 
-
----
+Entorno local: si los tests se corren como root dentro del contenedor, después ejecutar `docker compose exec -u root laravel.test chown -R sail:sail storage bootstrap/cache` (si no, la app no puede escribir firmas, fotos ni exportaciones). El `backend/.env` local necesita `LOCAL_DISK_SERVE=true` para servir fotos y firmas.
 
 ## Despliegue (pendiente de conectar)
 
@@ -132,7 +139,7 @@ Ya corregido: login CSRF (se quitó la exención de `api/login`), enumeración p
 Pendiente:
 1. **En el primer deploy**: confirmar qué IP ve Laravel detrás del proxy de Vercel (registrar temporalmente `$request->ip()` y `X-Forwarded-For`). Si es la IP de Vercel, el rate limit de 30/min por IP sería compartido por todos los usuarios: agregar un `middleware.ts` en Next que reenvíe la IP del cliente con un secreto compartido, validado en el backend.
 2. **Antes de datos reales**: reemplazar `php artisan serve` en `Dockerfile.render` por un servidor de producción (FrankenPHP/Octane o nginx + php-fpm; verificar con `stack-advisor`), cachear config/rutas al arrancar y sacar el seeding del arranque (o usar un `AdminUserSeeder` dedicado).
-3. **Antes de datos reales (feature aparte)**: bitácora de seguridad de solo inserción (quién crea usuarios, cambia roles, restablece contraseñas, edita la matriz; login/logout) y bloqueo por intentos fallidos. Recuperación de contraseña por correo cuando se defina el servicio de correo.
+3. ~~Bitácora de seguridad y bloqueo por intentos~~ (hecho en 003). Pendiente: recuperación de contraseña por correo cuando se defina el servicio de correo.
 3b. **Antes de datos reales (revisión de seguridad de 007, Entregas)**:
    - Rol de la app en PostgreSQL sin ser dueño de las tablas y con `GRANT UPDATE (returned_quantity) ON delivery_items` por columna (además del trigger `delivery_items_guard_rows`).
    - *Bucket lock* / retención (object lock) de R2 sobre el prefijo `signatures/` para que las firmas no se puedan sobrescribir ni borrar.
@@ -145,7 +152,8 @@ Pendiente:
 6. Riesgo aceptado por el usuario (M-4, Ley 1581): Almacenista y Consulta tienen `usuarios.ver` con correo y último ingreso; se puede retirar desde la matriz.
 7. **Antes de datos reales (revisión 003/004)**: separar en Neon el rol dueño (migraciones, conexión directa) del rol de la app (pooler) con `GRANT SELECT, INSERT` sobre `security_events` y las tablas de historial (D-002 de 003); `ALTER ROLE <rol_app> SET timezone='UTC'`; tener 2 Administradores con usuario y correo no públicos; auditoría de cambios en empleados (E-1: quién crea/edita y valores anteriores) y copia de nombre y documento del empleado en cada entrega (007); obligaciones Ley 1581 (aviso de privacidad, política de tratamiento, RNBD si aplica, retención de datos de empleados inactivos y de la bitácora).
 8. **Primer despliegue (D-009 de 003)**: verificar la IP real detrás de Render con y sin Vercel delante, ajustar proxies de confianza y encabezados (E-7). Runbook de desbloqueo del admin: `php artisan security:unlock` (research.md de 003), con credencial temporal de mínimo privilegio si se ejecuta en local.
-9. Menores pendientes (revisión 001-rbac): carrera entre desactivar un rol y asignarlo a un usuario (falla cerrado: el usuario queda sin permisos); reactivar un usuario con rol inactivo; si existe el username `admin` sin rol Administrador y no hay ningún admin, el seeder falla con mensaje claro en vez de promoverlo.
+9. **Pendientes de la revisión de 008**: R-6 (tenencias visibles en el reporte por empleado con `reportes.ver`, mientras `/api/employees/{id}/holdings` exige `empleados.ver`); R-11 (`/api/reports/employee-options` lista exempleados: política de tratamiento, Ley 1581); B-2 residual de 007 (con solo `entregas.gestionar`, `/api/inventory/stock` muestra `min_stock`/`below_min` y la búsqueda de activos filtra por marca/modelo); `Delivery::signatureIntact()` sin uso (definir comando de auditoría); R-9 (rate limit para JSON de reportes y opciones si se escala); R-4 pendiente de la pregunta 36; verificar que `max_execution_time` aplique con el servidor de producción.
+10. Menores pendientes (revisión 001-rbac): carrera entre desactivar un rol y asignarlo a un usuario (falla cerrado: el usuario queda sin permisos); reactivar un usuario con rol inactivo; si existe el username `admin` sin rol Administrador y no hay ningún admin, el seeder falla con mensaje claro en vez de promoverlo.
 
 Corregido en 001-rbac: índices `lower()` y normalización de username/email, `@` prohibido en username, cambio de contraseña, `sanctum:prune-expired` programado, escalada vía `usuarios.gestionar` (RN-019), reset de la propia contraseña (RN-018), seeder del admin por rol (no por username) y admin inicial con cambio obligatorio, sin `Gate::before`, throttle en cambio de contraseña, rotación de `remember_token`, duplicados en carrera → 422, cabeceras anti-clickjacking en Next.
 

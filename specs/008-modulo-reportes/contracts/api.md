@@ -135,3 +135,13 @@ El frontend enlaza a `/activos/{asset.id}`, `/inventario` y `/entregas/{id}`.
 - `GET /api/reports/asset-type-options?search` (`reportes.ver`) → tipos por cantidad, incluidos inactivos, `[{id, name, is_active, category:{id,name}}]`.
 - CORS: `exposed_headers => ['Content-Disposition']` en `backend/config/cors.php`.
 - Exportaciones: escapar celdas que empiecen por `=`, `+`, `-` o `@` (inyección de fórmulas, E-8 de la revisión de seguridad de 004).
+
+## Revisión de seguridad de 008 (2026-10-17)
+
+- **Solo la query string (R-1)**: `format` y los filtros se leen y validan únicamente de la query (`ReportRequest::validationData()`), igual que el limitador. Un cuerpo JSON en el GET se ignora (no genera archivo, no aplica filtros, no se valida).
+- **`429` (límite de descargas)**: `format=xlsx|pdf` está limitado a **10 por minuto por usuario** (limitador `report-downloads`; el JSON no cuenta). Al superarlo: `429 {message}` con cabeceras `Retry-After` / `X-RateLimit-*`. El frontend muestra el mensaje en un toast.
+- **Tope de filas (R-2)**: antes de generar el archivo se cuentan las filas de las tablas (sin fichas ni totales). Máximo **2 000 en PDF** y **20 000 en Excel** (`ReportResponder::PDF_MAX_ROWS` / `XLSX_MAX_ROWS`); por encima → `422 {message, errors: {from: ["El reporte es demasiado grande: acota el rango de fechas o los filtros."]}}`, sin generar el archivo ni registrar la exportación. El JSON no tiene tope. En producción `max_execution_time = 60` (`backend/docker/php-production.ini`).
+- **Bitácora (R-3)**: cada descarga generada (`xlsx`/`pdf`, no el JSON) registra en `security_events` el evento `report_exported` ("Reporte exportado") con el usuario, IP y navegador, y `metadata {report: inventory|employee|asset|asset_type, subject_id: id del empleado/activo/tipo | null (inventario), format, filters: filtros validados de la query sin format, personal_data: bool}`. `personal_data` es `true` solo en el reporte por empleado con `empleados.ver` (trae documento, teléfono, correo y compañía, RN-022).
+- **IDs en la ruta (R-5)**: `{employee}`, `{asset}` y `{assetType}` (y todos los ids de modelo de la API, `Route::patterns` en `AppServiceProvider`) solo admiten dígitos; otro valor → `404 {message: "Recurso no encontrado."}`.
+- **PDF (R-7)**: dompdf sin ningún protocolo permitido (`allowed_protocols = []`); la plantilla no carga recursos.
+- **CSV futuro (R-8)**: hoy no hay exportación CSV. Si se agrega, el escape de fórmulas de E-8 no basta con el `quotePrefix` de Excel (un CSV no tiene estilos): las celdas que empiecen por `=`, `+`, `-`, `@`, tabulador o retorno de carro deben llevar un **apóstrofo literal** (`'`) al inicio del valor.

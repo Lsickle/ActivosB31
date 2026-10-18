@@ -2,10 +2,14 @@
 
 namespace App\Reports\Export;
 
+use App\Actions\RecordSecurityEvent;
+use App\Enums\SecurityEventType;
+use App\Http\Requests\Reportes\ReportRequest;
 use App\Reports\Report;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Excel;
 use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 
@@ -16,6 +20,16 @@ use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
  *
  * Cabeceras de las descargas: no se guardan en cachés (pueden traer datos
  * personales, RN-022) ni se reinterpreta el tipo de contenido.
+ *
+ * R-2 (revisión de seguridad de 008): antes de generar un archivo se cuentan
+ * sus filas; por encima del tope (PDF_MAX_ROWS / XLSX_MAX_ROWS) responde 422
+ * en `from` sin generarlo, para que una descarga no agote la memoria ni el
+ * tiempo del proceso. El JSON no tiene tope. Los topes se inyectan por el
+ * constructor (los tests los reducen).
+ *
+ * R-3: cada archivo generado deja un evento report_exported en la bitácora
+ * de seguridad (quién, qué reporte, de quién, formato, filtros y si trae
+ * datos personales del empleado). El JSON no se registra.
  */
 class ReportResponder
 {
@@ -30,9 +44,36 @@ class ReportResponder
      */
     public const array FORMATS = [self::FORMAT_JSON, self::FORMAT_XLSX, self::FORMAT_PDF];
 
-    public function respond(Report $report, string $format): JsonResponse|Response
+    /**
+     * R-2: filas de tabla máximas por archivo. dompdf es el más costoso
+     * (SC-001: ~1 000 filas en menos de 10 s).
+     */
+    public const int PDF_MAX_ROWS = 2000;
+
+    public const int XLSX_MAX_ROWS = 20000;
+
+    public const string TOO_LARGE_MESSAGE = 'El reporte es demasiado grande: acota el rango de fechas o los filtros.';
+
+    public function __construct(
+        private readonly RecordSecurityEvent $recordEvent,
+        private readonly int $pdfMaxRows = self::PDF_MAX_ROWS,
+        private readonly int $xlsxMaxRows = self::XLSX_MAX_ROWS,
+    ) {}
+
+    /**
+     * @throws ValidationException si el archivo supera el tope de filas (R-2).
+     */
+    public function respond(Report $report, ReportRequest $request): JsonResponse|Response
     {
-        return match ($format) {
+        $format = $request->reportFormat();
+
+        if ($format === self::FORMAT_JSON) {
+            return response()->json(['data' => $report->toArray()]);
+        }
+
+        $this->ensureWithinLimit($report, $format);
+
+        $response = match ($format) {
             self::FORMAT_XLSX => $this->download(
                 ExcelFacade::raw(new ReportSpreadsheet($report), Excel::XLSX),
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -43,8 +84,29 @@ class ReportResponder
                 'application/pdf',
                 $report->fileName(self::FORMAT_PDF),
             ),
-            default => response()->json(['data' => $report->toArray()]),
         };
+
+        $this->recordEvent->handle(SecurityEventType::ReportExported, $request->user(), metadata: [
+            'report' => $report->key(),
+            'subject_id' => $report->subjectId(),
+            'format' => $format,
+            'filters' => $request->reportFilters(),
+            'personal_data' => $report->containsPersonalData(),
+        ]);
+
+        return $response;
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function ensureWithinLimit(Report $report, string $format): void
+    {
+        $limit = $format === self::FORMAT_PDF ? $this->pdfMaxRows : $this->xlsxMaxRows;
+
+        if ($report->rowCount() > $limit) {
+            throw ValidationException::withMessages(['from' => [self::TOO_LARGE_MESSAGE]]);
+        }
     }
 
     /**

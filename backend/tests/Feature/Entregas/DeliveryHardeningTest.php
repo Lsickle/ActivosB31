@@ -13,7 +13,9 @@ use App\Models\AssetType;
 use App\Models\Delivery;
 use App\Models\DeliveryItem;
 use App\Models\DeliveryReturn;
+use App\Models\InventoryMovement;
 use App\Models\Location;
+use App\Models\StockLevel;
 use Illuminate\Support\Facades\Storage;
 
 require_once __DIR__.'/../../Support/deliveries.php';
@@ -98,6 +100,31 @@ describe('B-5: ubicación desactivada en carrera durante la devolución', functi
         expect(DeliveryReturn::query()->count())->toBe(0)
             ->and($helmetItem->fresh()->returned_quantity)->toBe(0)
             ->and($this->scenario['helmet']->fresh()->status)->toBe(AssetStatus::Assigned);
+    });
+
+    it('por cantidad: si la ubicación se desactiva antes de mover la existencia, 422 en items.N.to_location_id y no registra nada', function () {
+        $glovesItem = $this->delivery->items()->whereNull('asset_id')->sole();
+        $stockBefore = StockLevel::quantityOf($this->scenario['gloves'], $this->engine);
+        $movementsBefore = InventoryMovement::query()->count();
+
+        // Carrera: otra petición desactiva la ubicación después de la
+        // validación previa de RegisterDeliveryReturn (se simula al crear la
+        // devolución, justo antes de mover la existencia).
+        DeliveryReturn::creating(function () {
+            Location::query()->whereKey($this->engine->id)->update(['is_active' => false]);
+        });
+
+        $this->postJson("/api/deliveries/{$this->delivery->id}/returns", ['items' => [
+            ['delivery_item_id' => $glovesItem->id, 'quantity' => 2, 'condition' => 'good', 'to_location_id' => $this->engine->id],
+        ]])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['items.0.to_location_id' => RegisterDeliveryReturn::INACTIVE_LOCATION_MESSAGE])
+            ->assertJsonMissingValidationErrors(['to_location_id']);
+
+        expect(DeliveryReturn::query()->count())->toBe(0)
+            ->and($glovesItem->fresh()->returned_quantity)->toBe(0)
+            ->and(InventoryMovement::query()->count())->toBe($movementsBefore)
+            ->and(StockLevel::quantityOf($this->scenario['gloves'], $this->engine))->toBe($stockBefore);
     });
 });
 

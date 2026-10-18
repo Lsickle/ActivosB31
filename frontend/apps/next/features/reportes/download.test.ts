@@ -26,7 +26,10 @@ describe('saveFile', () => {
     expect(createObjectURL).toHaveBeenCalledWith(blob)
     expect(click).toHaveBeenCalledTimes(1)
     expect(document.querySelector('a[download]')).toBeNull()
-    vi.runAllTimers()
+    // R-10: la URL se libera 30 s después del clic, no de inmediato.
+    vi.advanceTimersByTime(29_999)
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:reporte')
   })
 

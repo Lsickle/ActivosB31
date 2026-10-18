@@ -62,6 +62,41 @@ abstract class Report
     abstract protected function sectionsFrom(array $data): array;
 
     /**
+     * Código del reporte en la bitácora (R-3): inventory, employee, asset o
+     * asset_type.
+     */
+    abstract public function key(): string;
+
+    /**
+     * R-3: id del empleado, activo o tipo del reporte; null en el inventario
+     * general.
+     */
+    public function subjectId(): ?int
+    {
+        return null;
+    }
+
+    /**
+     * R-3 / RN-022: ¿el reporte trae datos personales del empleado
+     * (documento, teléfono, correo, compañía)?
+     */
+    public function containsPersonalData(): bool
+    {
+        return false;
+    }
+
+    /**
+     * R-2: filas de datos de las secciones de tabla (sin las fichas ni los
+     * totales), para el tope de los archivos.
+     */
+    public function rowCount(): int
+    {
+        return collect($this->sections())
+            ->reject(fn (ReportSection $section) => $section->isFields())
+            ->sum(fn (ReportSection $section) => count($section->rows));
+    }
+
+    /**
      * D-005: carta vertical por defecto (fichas).
      *
      * @return 'portrait'|'landscape'

@@ -18,6 +18,7 @@ use App\Reports\AssetTypeReport;
 use App\Reports\EmployeeReport;
 use App\Reports\Export\ReportResponder;
 use App\Reports\InventoryReport;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 
@@ -25,6 +26,9 @@ use Illuminate\Http\Response;
  * Reportes (008, RN-032, RN-033): todos exigen reportes.ver (FormRequest) y
  * responden JSON, Excel o PDF desde la misma clase de reporte (D-001,
  * D-002). Contrato: specs/008-modulo-reportes/contracts/api.md.
+ *
+ * R-1: los filtros se leen ya validados de la query (ReportRequest), nunca
+ * con input()/filled(), que también mirarían el cuerpo de la petición.
  */
 class ReportController extends Controller
 {
@@ -37,13 +41,13 @@ class ReportController extends Controller
     {
         $report = new InventoryReport(
             $request->user(),
-            $request->filled('asset_category_id') ? AssetCategory::query()->find($request->integer('asset_category_id')) : null,
-            $request->filled('asset_type_id') ? AssetType::query()->find($request->integer('asset_type_id')) : null,
-            $request->filled('location_id') ? Location::query()->find($request->integer('location_id')) : null,
-            $request->filled('status') ? AssetStatus::from($request->validated('status')) : null,
+            $this->find(AssetCategory::class, $request->filterId('asset_category_id')),
+            $this->find(AssetType::class, $request->filterId('asset_type_id')),
+            $this->find(Location::class, $request->filterId('location_id')),
+            AssetStatus::tryFrom((string) $request->validated('status')),
         );
 
-        return $this->responder->respond($report, $request->reportFormat());
+        return $this->responder->respond($report, $request);
     }
 
     /**
@@ -54,7 +58,7 @@ class ReportController extends Controller
     {
         return $this->responder->respond(
             new EmployeeReport($request->user(), $employee, $request->dateRange()),
-            $request->reportFormat(),
+            $request,
         );
     }
 
@@ -65,7 +69,7 @@ class ReportController extends Controller
     {
         return $this->responder->respond(
             new AssetReport($request->user(), $asset, $request->dateRange()),
-            $request->reportFormat(),
+            $request,
         );
     }
 
@@ -81,9 +85,22 @@ class ReportController extends Controller
                 $request->user(),
                 $assetType,
                 $request->dateRange(),
-                $request->filled('location_id') ? Location::query()->find($request->integer('location_id')) : null,
+                $this->find(Location::class, $request->filterId('location_id')),
             ),
-            $request->reportFormat(),
+            $request,
         );
+    }
+
+    /**
+     * Modelo de un filtro ya validado (exists); null si el filtro no vino.
+     *
+     * @template TModel of Model
+     *
+     * @param  class-string<TModel>  $model
+     * @return TModel|null
+     */
+    private function find(string $model, ?int $id): ?Model
+    {
+        return $id === null ? null : $model::query()->find($id);
     }
 }

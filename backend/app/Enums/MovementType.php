@@ -67,10 +67,22 @@ enum MovementType: string
     }
 
     /**
-     * D-003: entradas y traslados solo con tipos disponibles y hacia
-     * ubicaciones disponibles (activas, de tipo activo).
+     * D-003: entradas, traslados y devoluciones solo hacia ubicaciones
+     * disponibles (activas, de tipo activo). B-5 (revisión de seguridad de
+     * 007): la devolución por cantidad también, para que una ubicación
+     * desactivada en carrera durante RegisterDeliveryReturn no reciba stock.
      */
     public function requiresAvailableTarget(): bool
+    {
+        return in_array($this, [self::Entry, self::Transfer, self::Return], true);
+    }
+
+    /**
+     * D-003: entradas y traslados solo con tipos disponibles (tipo activo de
+     * categoría activa). La devolución no lo exige: lo entregado vuelve
+     * aunque el tipo se haya desactivado después.
+     */
+    public function requiresAvailableType(): bool
     {
         return in_array($this, [self::Entry, self::Transfer], true);
     }

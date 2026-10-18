@@ -43,6 +43,21 @@ class EmployeeReport extends Report
         return 'reporte-empleado';
     }
 
+    public function key(): string
+    {
+        return 'employee';
+    }
+
+    public function subjectId(): int
+    {
+        return $this->employee->id;
+    }
+
+    public function containsPersonalData(): bool
+    {
+        return $this->showsPersonalData();
+    }
+
     protected function filters(): array
     {
         return $this->range->filters();

@@ -39,6 +39,16 @@ class AssetTypeReport extends Report
         return 'reporte-tipo';
     }
 
+    public function key(): string
+    {
+        return 'asset_type';
+    }
+
+    public function subjectId(): int
+    {
+        return $this->assetType->id;
+    }
+
     protected function filters(): array
     {
         return [

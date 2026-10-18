@@ -176,6 +176,22 @@ describe('D-003: tipos y ubicaciones inactivos', function () {
         $inactiveCategory = quantityType(['asset_category_id' => AssetCategory::factory()->create(['is_active' => false])->id]);
         expect(validationErrors(fn () => record(MovementType::Entry, $inactiveCategory, 1, to: $this->warehouse)))->toHaveKey('asset_type_id');
     });
+
+    it('B-5 (007): una devolución tampoco entra a una ubicación inactiva y no toca existencias', function () {
+        $this->warehouse->forceFill(['is_active' => false])->save();
+
+        expect(validationErrors(fn () => record(MovementType::Return, $this->type, 1, to: $this->warehouse)))->toHaveKey('to_location_id')
+            ->and(StockLevel::quantityOf($this->type, $this->warehouse))->toBe(0)
+            ->and(InventoryMovement::query()->count())->toBe(0);
+    });
+
+    it('B-5 (007): la devolución sí admite un tipo inactivo (lo prestado vuelve aunque el tipo ya no se use)', function () {
+        $this->type->forceFill(['is_active' => false])->save();
+
+        record(MovementType::Return, $this->type, 2, to: $this->warehouse);
+
+        expect(StockLevel::quantityOf($this->type, $this->warehouse))->toBe(2);
+    });
 });
 
 it('D-002: rechaza combinaciones de ubicaciones que no corresponden a la clase', function (MovementType $type, bool $withFrom, bool $withTo) {

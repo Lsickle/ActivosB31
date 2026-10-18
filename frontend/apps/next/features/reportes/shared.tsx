@@ -30,8 +30,13 @@ export function plural(count: number, singular: string, pluralWord: string): str
   return `${formatNumber(count)} ${count === 1 ? singular : pluralWord}`
 }
 
-/** Mensaje para el usuario: el del servidor si es un error de la API; si no, uno genérico. */
+/**
+ * Mensaje para el usuario: el del servidor si es un error de la API (4xx);
+ * si no, uno genérico. Un 5xx trae un texto técnico ("Server Error" en
+ * producción, la excepción en desarrollo): se muestra el genérico.
+ */
 export function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status >= 500) return fallback
   if (error instanceof ApiError || error instanceof ApiValidationError || error instanceof RateLimitError) return error.message
   return fallback
 }

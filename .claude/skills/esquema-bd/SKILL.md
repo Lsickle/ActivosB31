@@ -121,7 +121,10 @@ security_events(id, event varchar(50) idx,      -- App\Enums\SecurityEventType: 
                                                 -- user_status_changed, password_reset, password_changed, role_created,
                                                 -- role_updated, role_status_changed, role_permissions_updated,
                                                 -- settings_updated (B-5 de 005: PUT /api/settings con
-                                                --   metadata {changes:{expiry_alert_days:[antes, después]}})
+                                                --   metadata {changes:{expiry_alert_days:[antes, después]}}),
+                                                -- report_exported (R-3 de 008: descarga xlsx/pdf de un reporte,
+                                                --   metadata {report: inventory|employee|asset|asset_type,
+                                                --   subject_id|null, format, filters, personal_data: bool})
                 actor_id FK -> users NULL idx,  -- quién lo hizo; NULL en login_failed y account_locked (no autenticado)
                 target_user_id FK -> users NULL idx, target_role_id FK -> roles NULL,
                 login_attempted varchar(255) NULL,  -- texto ingresado, solo en login_failed (D-005); nunca la contraseña

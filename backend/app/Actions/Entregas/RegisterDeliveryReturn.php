@@ -32,7 +32,9 @@ use InvalidArgumentException;
  *    baja con la observación como motivo (conserva su última ubicación).
  * 4. Por cantidad (RecordStockMovement, en orden (asset_type_id,
  *    location_id)): bueno → devolución a la ubicación; dañado o perdido →
- *    pérdida sin ubicación (no vuelven al stock, RN-038).
+ *    pérdida sin ubicación (no vuelven al stock, RN-038). B-5: si la
+ *    ubicación se desactivó en carrera, RecordStockMovement la rechaza y el
+ *    error se devuelve en items.N.to_location_id (se deshace todo).
  *
  * Orden de bloqueo: ítems → activos → existencias (el mismo de CreateDelivery
  * para activos y existencias).
@@ -203,19 +205,30 @@ class RegisterDeliveryReturn
                 fn (array $a, array $b) => ($a['location']?->id ?? 0) <=> ($b['location']?->id ?? 0),
             ]);
 
-        foreach ($byQuantity as $return) {
+        foreach ($byQuantity as $index => $return) {
             $isGood = $return['condition'] === ReturnCondition::Good;
 
-            $this->recordMovement->handle(
-                $isGood ? MovementType::Return : MovementType::Loss,
-                $return['item']->assetType,
-                $return['quantity'],
-                null,
-                $isGood ? $return['location'] : null,
-                self::movementReason($delivery, $return['condition'], $return['notes']),
-                $user,
-                $delivery->id,
-            );
+            // B-5: igual que con los serializados, la ubicación pudo
+            // desactivarse después de la validación previa; RecordStockMovement
+            // la revisa de nuevo y el error se informa en el renglón.
+            try {
+                $this->recordMovement->handle(
+                    $isGood ? MovementType::Return : MovementType::Loss,
+                    $return['item']->assetType,
+                    $return['quantity'],
+                    null,
+                    $isGood ? $return['location'] : null,
+                    self::movementReason($delivery, $return['condition'], $return['notes']),
+                    $user,
+                    $delivery->id,
+                );
+            } catch (ValidationException $exception) {
+                if (! array_key_exists('to_location_id', $exception->errors())) {
+                    throw $exception;
+                }
+
+                throw ValidationException::withMessages(["items.{$index}.to_location_id" => [self::INACTIVE_LOCATION_MESSAGE]]);
+            }
         }
     }
 

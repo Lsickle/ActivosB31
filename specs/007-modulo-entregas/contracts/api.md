@@ -4,7 +4,7 @@ Complementa `plan.md`. Fijado con el frontend ya construido (2026-10-17).
 
 ## Recursos
 
-`Delivery`: `{id, code, employee:{id,full_name,position}, kind:'dotacion'|'prestamo', kind_label, due_on|null, status:'open'|'closed'|'overdue', from_location:{id,name}, notes|null, delivered_by:{id,name}, delivered_at, signature_url (solo en show/store; URL temporal 10 min), items:[{id, asset:{id,plate}|null, asset_type:{id,name,tracking_mode}, quantity, returned_quantity, pending_quantity, returns:[{id, quantity, condition, condition_label, to_location:{id,name}|null, notes, received_by:{id,name}, returned_at}]}]}`.
+`Delivery`: `{id, code, employee:{id,full_name,position}, kind:'dotacion'|'prestamo', kind_label, due_on|null, status:'open'|'closed'|'overdue', from_location:{id,name}, notes|null, delivered_by:{id,name}, delivered_at, signature_url (solo en show/store; URL temporal 10 min; **condicional**: solo si el usuario tiene `entregas.gestionar` o `empleados.ver` — `DeliveryPolicy::viewSignature`, M-1, provisional pregunta 33 / 33A de `docs/modulos.md`; sin esos permisos la clave no viene y la ficha se muestra sin la imagen), items:[{id, asset:{id,plate}|null, asset_type:{id,name,tracking_mode}, quantity, returned_quantity, pending_quantity, returns:[{id, quantity, condition, condition_label, to_location:{id,name}|null, notes, received_by:{id,name}, returned_at}]}]}`.
 
 ## Rutas
 
@@ -24,3 +24,13 @@ Claves: `employee_id`, `kind`, `due_on`, `from_location_id`, `notes`, `signature
 ## Permisos cruzados
 
 El asistente de entrega lee `GET /api/assets?status=available&search=` y `GET /api/inventory/stock?asset_type_id&location_id`. Esas dos lecturas se autorizan también con `entregas.gestionar` (además de `activos.ver` / `inventario.ver`).
+
+### Recurso reducido de `GET /api/assets` (B-2, revisión de seguridad de 007)
+
+Con `entregas.gestionar` **sin** `activos.ver`, `GET /api/assets` devuelve **solo los activos Disponibles** con un recurso reducido (`AssetForDeliveryResource`), solo con lo que necesita el asistente de entrega:
+
+```
+{data: [{id, plate, serial|null, status, asset_type:{id,name}, location:{id,name}|null}], meta: {…paginación}}
+```
+
+Sin marca, modelo, valor, observaciones, poseedor ni mantenimientos. Con `activos.ver` se recibe el recurso completo de 005. En el frontend: tipo `AssetForDelivery` (`frontend/packages/app/features/entregas/api.ts`).

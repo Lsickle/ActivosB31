@@ -54,13 +54,19 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * B-4 (revisión de seguridad de 005): los ids de activo y de plan solo
-     * admiten dígitos; cualquier otro valor da 404 sin llegar a la consulta.
+     * B-4 (revisión de seguridad de 005) y R-5 (de 008): todo id de modelo en
+     * la ruta solo admite dígitos; cualquier otro valor da 404 sin llegar a
+     * la consulta (en PostgreSQL un texto contra una columna bigint sería un
+     * error 500). Se aplica a las rutas que se registran después del boot,
+     * es decir, a todas las de routes/api.php. Un parámetro nuevo de modelo
+     * debe agregarse aquí.
      */
     private function configureRoutePatterns(): void
     {
-        Route::pattern('asset', '[0-9]+');
-        Route::pattern('plan', '[0-9]+');
+        Route::patterns(array_fill_keys([
+            'asset', 'plan', 'user', 'role', 'asset_category', 'asset_type', 'assetType',
+            'location_type', 'location', 'position', 'company', 'employee', 'delivery', 'count',
+        ], '[0-9]+'));
     }
 
     /**
@@ -97,6 +103,8 @@ class AppServiceProvider extends ServiceProvider
 
         // 008 (D-002): generar un Excel o un PDF ocupa el proceso varios
         // segundos (SC-001); se limita por usuario. El JSON no cuenta.
+        // R-1: el formato se lee solo de la query, igual que en ReportRequest
+        // (validationData()); un `format` en el cuerpo se ignora en ambos.
         RateLimiter::for('report-downloads', function (Request $request) {
             if (! in_array($request->query('format'), [ReportResponder::FORMAT_XLSX, ReportResponder::FORMAT_PDF], true)) {
                 return Limit::none();

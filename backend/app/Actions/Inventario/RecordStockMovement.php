@@ -33,9 +33,9 @@ use InvalidArgumentException;
  *   negativo (FR-002).
  * - `asset_type_id`: solo tipos por cantidad (RN-007); en entradas y
  *   traslados, además, tipo activo de categoría activa (D-003).
- * - `to_location_id`: en entradas y traslados, destino activo de tipo de
- *   ubicación activo (D-003). Sacar desde una ubicación inactiva sí se
- *   permite (vaciarla).
+ * - `to_location_id`: en entradas, traslados y devoluciones (B-5 de 007),
+ *   destino activo de tipo de ubicación activo (D-003). Sacar desde una
+ *   ubicación inactiva sí se permite (vaciarla).
  * - `reason`: obligatorio en salidas y ajustes (FR-001).
  *
  * Concurrencia (D-001): dentro de la transacción crea las filas que falten
@@ -160,7 +160,7 @@ class RecordStockMovement
 
         if ($assetType->tracking_mode !== TrackingMode::Quantity) {
             $errors['asset_type_id'] = 'Solo los tipos controlados por cantidad tienen existencias.';
-        } elseif ($type->requiresAvailableTarget() && ! AssetType::query()->available()->whereKey($assetType->id)->exists()) {
+        } elseif ($type->requiresAvailableType() && ! AssetType::query()->available()->whereKey($assetType->id)->exists()) {
             $errors['asset_type_id'] = 'El tipo de activo o su categoría está inactivo.';
         }
 

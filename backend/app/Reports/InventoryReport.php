@@ -42,6 +42,11 @@ class InventoryReport extends Report
         return 'inventario';
     }
 
+    public function key(): string
+    {
+        return 'inventory';
+    }
+
     /**
      * D-005: carta horizontal.
      */

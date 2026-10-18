@@ -12,8 +12,8 @@
 | - enable_remote / allowed_remote_hosts: nunca descargar recursos remotos
 |   (SSRF, CVE de dompdf corregidas en 3.1.6).
 | - enable_php / enable_javascript: nada de código embebido.
-| - chroot + allowed_protocols: solo `data://`; los archivos locales quedan
-|   limitados a la carpeta de plantillas de reportes (sin fotos ni firmas).
+| - chroot + allowed_protocols: ningún protocolo (R-7); los archivos locales
+|   quedan además limitados a la carpeta de plantillas (sin fotos ni firmas).
 | - DejaVu Sans (incluida en dompdf) para tildes y eñes.
 |
 */
@@ -35,11 +35,11 @@ return [
 
         'chroot' => [resource_path('views/reports')],
 
-        'allowed_protocols' => [
-            'data://' => ['rules' => []],
-        ],
-
-        'artifactPathValidation' => null,
+        // R-7 (revisión de seguridad de 008): la plantilla no carga ningún
+        // recurso (ni imágenes, ni hojas de estilo, ni @font-face): ningún
+        // protocolo permitido, ni siquiera data://. Las fuentes de dompdf se
+        // leen de font_dir sin pasar por esta lista.
+        'allowed_protocols' => [],
 
         'log_output_file' => null,
 

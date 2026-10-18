@@ -1,6 +1,7 @@
 import { apiFetch } from '../../lib/api-client'
 import { jsonBody, query, type Paginated } from '../../lib/api-helpers'
 import type { TrackingMode } from '../configuracion/schemas'
+import type { AssetStatus } from '../activos/schemas'
 import type { DeliveryKind, DeliveryPayload, DeliveryStatus, ReturnCondition, ReturnPayload } from './schemas'
 
 // Contrato: specs/007-modulo-entregas/plan.md ("Contrato (resumen)").
@@ -8,6 +9,21 @@ import type { DeliveryKind, DeliveryPayload, DeliveryStatus, ReturnCondition, Re
 // (FR-006). Las entregas son inmutables: no hay edición ni borrado (FR-001).
 
 type NamedRef = { id: number; name: string }
+
+/**
+ * B-2 (revisión de seguridad de 007): recurso reducido de GET /api/assets
+ * que recibe quien tiene entregas.gestionar sin activos.ver (solo
+ * Disponibles). Con activos.ver llega el AssetRecord completo, que es
+ * compatible con este tipo: el asistente de entrega solo usa estos campos.
+ */
+export type AssetForDelivery = {
+  id: number
+  plate: string
+  serial: string | null
+  status: AssetStatus
+  asset_type: NamedRef
+  location: NamedRef | null
+}
 
 // D-006 / RN-022: en Entregas el empleado viaja sin datos personales.
 export type DeliveryEmployee = { id: number; full_name: string; position: string }

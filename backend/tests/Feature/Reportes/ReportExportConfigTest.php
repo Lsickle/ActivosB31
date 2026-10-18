@@ -17,9 +17,17 @@ describe('configuración de dompdf', function () {
             ->and(config('dompdf.options.allowed_remote_hosts'))->toBe([]);
     });
 
-    it('limita el acceso a archivos locales a la carpeta de plantillas de reportes', function () {
+    it('limita el acceso a archivos locales a la carpeta de plantillas de reportes (chroot)', function () {
         expect(config('dompdf.options.chroot'))->toBe([resource_path('views/reports')])
-            ->and(array_keys(config('dompdf.options.allowed_protocols')))->toBe(['data://']);
+            ->and(config('dompdf.options.allowed_protocols'))->toBe([]);
+    });
+
+    it('R-7: no permite ningún protocolo (la plantilla no carga recursos) ni sobrescribe la validación de rutas', function () {
+        expect(config('dompdf.options.allowed_protocols'))->toBe([])
+            ->and(config('dompdf.options'))->not->toHaveKey('artifactPathValidation');
+
+        $options = Pdf::loadHTML('<p>x</p>')->getDomPDF()->getOptions();
+        expect($options->getAllowedProtocols())->toBe([]);
     });
 
     it('usa DejaVu Sans por defecto (tildes y eñes)', function () {

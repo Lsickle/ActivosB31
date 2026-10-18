@@ -139,3 +139,23 @@ Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `st
 
 Riesgos aceptados por el usuario (2026-10-17): Almacenista y Consulta conservan `usuarios.ver` con los datos completos de las cuentas (hallazgo M-4, Ley 1581); se puede retirar desde la matriz. La bitácora de seguridad (A-1) se hará como feature aparte **antes de cargar datos reales**, junto con el bloqueo por intentos fallidos.
 
+
+---
+
+## Preguntas pendientes del usuario (2026-10-17)
+
+Formuladas en la conversación con opciones; ⭐ = recomendada. Lo marcado "provisional" ya está implementado con la opción recomendada y se ajusta si el usuario elige otra.
+
+| # | Pregunta | Recomendada | Estado |
+|---|---|---|---|
+| 26 | Retención de la bitácora de seguridad | ⭐ login fallidos de cuentas inexistentes 90 días; resto 2 años (ajustable a TRD) | pendiente |
+| 27 | Protección de la cuenta admin | ⭐ usuario/correo del admin inicial desde variables de entorno + segundo Administrador al desplegar | pendiente |
+| 28 | Naturaleza jurídica de la estación (RNBD) | — (entidad pública / bomberos voluntarios / no sabe) | pendiente |
+| 29 | Datos de empleados retirados | ⭐ conservar nombre y documento; borrar contacto y tallas tras 2 años inactivo | pendiente |
+| 30 | Auditoría de cambios de empleados + copia del empleado en cada entrega | ⭐ sí (pequeño cambio de esquema) | pendiente |
+| 31 | Formato del documento por tipo | ⭐ CC/TI/CE solo dígitos 5–12; PA/PPT alfanumérico | pendiente |
+| 32 | Consecutivo de entregas sin huecos | ⭐ no importa que haya saltos | pendiente |
+| 33 | Quién ve la imagen de la firma | ⭐ entregas.gestionar o empleados.ver | **provisional 33A implementada** |
+| 34 | Plazo máximo de un préstamo | ⭐ 1 año | pendiente |
+| 35 | Activo serializado debe estar en la ubicación de origen | ⭐ sí, el asistente solo ofrece los del origen | pendiente |
+| 36 | `reportes.ver` sin permiso del módulo de origen | ⭐ no: cada reporte exige también el ver de su módulo | pendiente |

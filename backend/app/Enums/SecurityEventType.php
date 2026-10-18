@@ -23,6 +23,7 @@ enum SecurityEventType: string
     case RoleStatusChanged = 'role_status_changed';
     case RolePermissionsUpdated = 'role_permissions_updated';
     case SettingsUpdated = 'settings_updated';
+    case ReportExported = 'report_exported';
 
     public function label(): string
     {
@@ -42,6 +43,7 @@ enum SecurityEventType: string
             self::RoleStatusChanged => 'Rol activado/desactivado',
             self::RolePermissionsUpdated => 'Matriz de permisos modificada',
             self::SettingsUpdated => 'Ajustes modificados',
+            self::ReportExported => 'Reporte exportado',
         };
     }
 }

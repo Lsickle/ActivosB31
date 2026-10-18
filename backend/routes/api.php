@@ -169,7 +169,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::middleware('throttle:report-downloads')->group(function () {
             Route::get('/reports/inventory', [ReportController::class, 'inventory'])->name('reports.inventory');
             Route::get('/reports/employees/{employee}', [ReportController::class, 'employee'])->whereNumber('employee')->name('reports.employee');
-            Route::get('/reports/assets/{asset}', [ReportController::class, 'asset'])->name('reports.asset');
+            Route::get('/reports/assets/{asset}', [ReportController::class, 'asset'])->whereNumber('asset')->name('reports.asset');
             Route::get('/reports/asset-types/{assetType}', [ReportController::class, 'assetType'])->whereNumber('assetType')->name('reports.asset-type');
         });
         Route::get('/reports/asset-options', [ReportOptionsController::class, 'assets'])->name('reports.asset-options');

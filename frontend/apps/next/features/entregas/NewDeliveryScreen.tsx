@@ -6,10 +6,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeftIcon, CheckIcon, PackageIcon, PlusIcon, SearchIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { assetsApi, type AssetRecord } from 'app/features/activos/api'
+import { assetsApi } from 'app/features/activos/api'
 import { employeesOptions, type EmployeeOption } from 'app/features/empleados/api'
 import { todayIsoDate } from 'app/features/empleados/schemas'
-import { deliveriesApi } from 'app/features/entregas/api'
+import { deliveriesApi, type AssetForDelivery } from 'app/features/entregas/api'
 import { DELIVERY_KIND_LABELS, deliveryFormSchema, NOTES_MAX, type DeliveryKind } from 'app/features/entregas/schemas'
 import { inventoryApi } from 'app/features/inventario/api'
 import { ApiValidationError } from 'app/lib/api-client'
@@ -646,7 +646,7 @@ function ItemsStep({
 // Activos serializados disponibles (US1-4: no se ofrecen Asignados, En mantenimiento ni Dados de baja).
 function AssetSearch({ addedIds, onAdd }: { addedIds: Set<number>; onAdd: (line: Line) => void }) {
   const [searchInput, setSearchInput] = useState('')
-  const [results, setResults] = useState<{ term: string; assets: AssetRecord[] | null; failed: boolean } | null>(null)
+  const [results, setResults] = useState<{ term: string; assets: AssetForDelivery[] | null; failed: boolean } | null>(null)
 
   useEffect(() => {
     const term = searchInput.trim()
