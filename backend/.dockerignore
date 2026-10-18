@@ -1,12 +1,25 @@
+# Contexto de build de Dockerfile.render (A7 de la revisión del despliegue):
+# nada de secretos, datos locales ni código que no corre en producción.
 .env
 .env.*
 !.env.example
+.git
+.github
 vendor
 node_modules
+# Archivos locales (fotos, firmas, exportaciones de desarrollo). Los
+# directorios de storage se crean vacíos en el Dockerfile.
+storage/app/*
 storage/logs/*
 storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/views/*
+storage/framework/testing/*
 bootstrap/cache/*.php
+*.sqlite
+*.sqlite-journal
+# Tests y su configuración: no se instalan dependencias de desarrollo.
+tests
+phpunit.xml
 .phpunit.cache
-.git
+.phpunit.result.cache

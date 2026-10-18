@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "routes": [
+    {
+      "src": "/(api|sanctum)/(.*)",
+      "dest": "${BACKEND_URL}/$1/$2",
+      "env": ["BACKEND_URL"],
+      "headers": {
+        "x-vercel-enable-rewrite-caching": "0"
+      },
+      "transforms": [
+        {
+          "type": "request.headers",
+          "op": "set",
+          "target": { "key": "x-proxy-secret" },
+          "args": "$VERCEL_PROXY_SECRET",
+          "env": ["VERCEL_PROXY_SECRET"]
+        }
+      ]
+    }
+  ]
+}

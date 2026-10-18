@@ -1,0 +1,39 @@
+# Caddyfile de producción (Dockerfile.render). FrankenPHP en modo clásico,
+# sin Octane ni worker mode. Render termina TLS en su proxy: aquí HTTP plano
+# en $PORT (Render lo define; 8080 por defecto).
+{
+	auto_https off
+	admin off
+
+	frankenphp {
+		# Render Starter: 512 MB. Dos hilos PHP x memory_limit 256M
+		# (php-production.ini) = 512 MB de techo teórico; GOMEMLIMIT=450MiB
+		# frena al runtime de Go antes. Una tercera petición espera hasta 15 s
+		# y luego recibe 503 en vez de agotar la memoria.
+		num_threads 2
+		max_wait_time 15s
+	}
+}
+
+:{$PORT:8080} {
+	root * /app/public
+	encode zstd gzip
+
+	# Igual que post_max_size: fotos de activos de 4 MB (AssetPhotoRules) con
+	# margen. Lo más grande se corta aquí, sin llegar a PHP.
+	request_body {
+		max_size 8MB
+	}
+
+	# A6 (revisión del despliegue): la API responde JSON y archivos generados
+	# (PDF/Excel); nunca se incrusta ni se interpreta con otro tipo MIME, y no
+	# filtra rutas en el Referer. -Server oculta "Caddy"/"FrankenPHP".
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		-Server
+	}
+
+	php_server
+}

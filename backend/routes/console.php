@@ -8,8 +8,10 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// FR-016 (D-009): depura los tokens Bearer (móvil) vencidos. En Render el
-// scheduler necesita un cron job o worker que ejecute `schedule:run`.
+// FR-016 (D-009): depura los tokens Bearer (móvil) vencidos. En Render no se
+// usa schedule:run: el Cron Job de mantenimiento ejecuta este comando y el de
+// abajo directamente (docs/despliegue.md, sección 5.1). Si cambia un horario
+// aquí, cambiarlo también allá.
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
 
 // M-3 (revisión de seguridad de 007/008): auditoría semanal de las firmas de

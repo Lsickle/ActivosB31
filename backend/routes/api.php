@@ -158,7 +158,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         // /deliveries/alerts va antes de /deliveries/{delivery}.
         Route::get('/deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
         Route::get('/deliveries/alerts', [DeliveryController::class, 'alerts'])->name('deliveries.alerts');
-        Route::post('/deliveries', [DeliveryController::class, 'store'])->name('deliveries.store');
+        // Revisión de seguridad de 007: cuerpo de máximo 1 MB (firma ≤ 300 KB).
+        Route::post('/deliveries', [DeliveryController::class, 'store'])->middleware(['body.limit:1024', 'json.body'])->name('deliveries.store');
         Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])->whereNumber('delivery')->name('deliveries.show');
         Route::post('/deliveries/{delivery}/returns', [DeliveryReturnController::class, 'store'])->whereNumber('delivery')->name('deliveries.returns.store');
         // D-007: tenencias del empleado (empleados.ver).

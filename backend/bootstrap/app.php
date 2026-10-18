@@ -2,6 +2,9 @@
 
 use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\LimitRequestBody;
+use App\Http\Middleware\RequireJsonBody;
+use App\Http\Middleware\TrustVercelProxy;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -28,6 +31,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // rewrite de Vercel), revisar cuántos saltos hay que confiar.
         $middleware->trustProxies(at: 'REMOTE_ADDR');
 
+        // Pendiente de seguridad 1: con el rewrite de Vercel delante, la IP
+        // real llega en X-Real-IP y solo se acepta con X-Proxy-Secret
+        // (VERCEL_PROXY_SECRET). Va al inicio del stack global (A4 de la
+        // revisión del despliegue): el secreto se borra antes que cualquier
+        // otro middleware lo vea; TrustProxies resuelve la IP después, al
+        // llamar a $request->ip(). Por verificar en el primer deploy
+        // (docs/despliegue.md).
+        $middleware->prepend(TrustVercelProxy::class);
+
         // Sanctum: sesión por cookie para el SPA web (dominios en
         // SANCTUM_STATEFUL_DOMAINS).
         $middleware->statefulApi();
@@ -35,6 +47,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'password.changed' => EnsurePasswordIsChanged::class,
+            'body.limit' => LimitRequestBody::class,
+            'json.body' => RequireJsonBody::class,
         ]);
 
         // API pura: no existe una ruta web 'login'. Sin esto, una petición no

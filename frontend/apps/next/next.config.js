@@ -70,9 +70,16 @@ const withTurpopack = {
 // en vez de cross-site, que los navegadores descartan. En Vercel se define
 // BACKEND_URL y NEXT_PUBLIC_API_URL vacío (mismo origen). Sin BACKEND_URL
 // (dev local con Sail, mismo host "localhost") no se activa ningún rewrite.
+//
+// B2 (revisión del despliegue): en Vercel (process.env.VERCEL definido en el
+// build) el único proxy es el de vercel.json, que agrega X-Proxy-Secret. Si
+// este rewrite también existiera, un vercel.json que no se aplique pasaría
+// inadvertido: la app funcionaría sin secreto y Laravel vería la IP de
+// Vercel. Así, si vercel.json falla, /api responde 404 y la prueba c lo
+// detecta. Este rewrite queda para `next start` fuera de Vercel.
 async function proxyRewrites() {
   const backendUrl = process.env.BACKEND_URL
-  if (!backendUrl) {
+  if (!backendUrl || process.env.VERCEL) {
     return []
   }
 

@@ -1,54 +1,68 @@
-# Imagen de producción para Render (Web Service tipo Docker).
-# En Render: Root Directory = backend, Dockerfile Path = Dockerfile.render,
-# variables de entorno según .env.example (APP_KEY, DB_*, FRONTEND_URL,
-# SANCTUM_STATEFUL_DOMAINS, SESSION_DOMAIN, ADMIN_INITIAL_PASSWORD).
+# Imagen de producción para Render (Web Service tipo Docker). Guía completa:
+# docs/despliegue.md. En Render: Root Directory = backend, Dockerfile Path =
+# Dockerfile.render, Health Check Path = /up.
+#
+# Servidor: FrankenPHP en modo clásico (sin Octane), Caddyfile en
+# docker/Caddyfile. Pendiente de seguridad 2 (CLAUDE.md): reemplaza
+# `php artisan serve`.
+#
+# Las migraciones y el seeder NO corren al arrancar: van en el Pre-Deploy
+# Command de Render, con la conexión directa de Neon (DB_MIGRATION_URL).
+# Tampoco se cachea la configuración en el build (no hay variables de
+# entorno): se hace al arrancar con `php artisan optimize`.
 
-FROM php:8.4-cli-alpine
+FROM dunglas/frankenphp:1.13.1-php8.4-trixie
 
-# Instalar dependencias del sistema y herramientas de compilación
-RUN apk add --no-cache \
-    postgresql-dev \
-    libpng-dev \
-    libjpeg-turbo-dev \
-    libwebp-dev \
-    freetype-dev \
-    libzip-dev \
-    zip \
-    unzip \
-    git \
-    curl \
-    oniguruma-dev \
-    icu-dev \
-    $PHPIZE_DEPS
+# Extensiones: pdo_pgsql (PostgreSQL), gd (fotos y firmas; Intervention Image,
+# PhpSpreadsheet), exif (orientación de fotos de celular antes de quitar los
+# metadatos, Ley 1581), zip (Excel), intl, bcmath, opcache.
+RUN install-php-extensions pdo_pgsql gd exif zip intl bcmath opcache
 
-# Instalar extensiones de PHP requeridas por Laravel + PostgreSQL. GD con
-# WebP (M-2): las fotos de activos aceptan JPEG, PNG y WebP (FR-008). exif:
-# Intervention lo usa para orientar las fotos de celular antes de quitarles
-# los metadatos.
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install \
-        pdo \
-        pdo_pgsql \
-        bcmath \
-        zip \
-        gd \
-        mbstring \
-        intl \
-        exif
+# M-2 (revisión de 005): las fotos aceptan JPEG, PNG y WebP (FR-008) y los PDF
+# usan FreeType. Si GD quedó sin alguno, el build falla aquí y no en
+# producción.
+RUN php -r '$gd = gd_info(); foreach (["WebP Support", "JPEG Support", "FreeType Support", "PNG Support"] as $feature) { if (empty($gd[$feature])) { fwrite(STDERR, "GD sin {$feature}\n"); exit(1); } } echo "GD OK\n";'
 
-# php.ini de producción (M-1): memory_limit y límites de subida acordes a
-# las fotos de activos (4 MB, 24 Mpx).
+# php.ini de producción + ajustes propios (M-1: memory_limit y límites de
+# subida; R-2: max_execution_time).
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY docker/php-production.ini $PHP_INI_DIR/conf.d/zz-activosb31.ini
 
-# Copiar ejecutable oficial de Composer
+COPY docker/Caddyfile /etc/frankenphp/Caddyfile
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/html
+WORKDIR /app
+
+# Dependencias en una capa propia: solo se reconstruye si cambia el lock.
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --prefer-dist --no-progress \
+        --no-scripts --no-autoloader \
+    && composer clear-cache
+
 COPY . .
 
-# Instalar dependencias de Composer (sin dev) para producción
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-req=php+
+# El autoload dispara package:discover, que arranca la app sin variables de
+# Render (APP_ENV cae en "production"): AppServiceProvider omite ahí el
+# chequeo M-4 de ASSETS_DISK.
+RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views \
+        storage/logs storage/app/private storage/app/public bootstrap/cache \
+    && composer dump-autoload --no-dev --optimize --classmap-authoritative --no-interaction \
+    && rm /usr/bin/composer
+
+# Usuario sin privilegios (uid 10001): solo escribe en storage, bootstrap/cache
+# y los directorios de Caddy. Escucha en 8080, sin capacidades extra.
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app \
+    && setcap -r /usr/local/bin/frankenphp \
+    && chown -R app:app storage bootstrap/cache /data/caddy /config/caddy
+
+USER app
+
+ENV LOG_CHANNEL=stderr \
+    GOMEMLIMIT=450MiB \
+    PORT=8080
 
 EXPOSE 8080
 
-CMD php artisan migrate --force --seed && php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}
+CMD ["sh", "-c", "php artisan optimize && exec frankenphp run --config /etc/frankenphp/Caddyfile"]

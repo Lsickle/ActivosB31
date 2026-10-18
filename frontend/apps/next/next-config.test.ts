@@ -28,4 +28,22 @@ describe('cabeceras de seguridad de next.config.js (B-6)', () => {
       { source: '/sanctum/:path*', destination: 'https://api.example.test/sanctum/:path*' },
     ])
   })
+
+  // B2 (revisión del despliegue): en Vercel el proxy es solo el de
+  // vercel.json (con X-Proxy-Secret). Si next.config.js también reenviara,
+  // un fallo de vercel.json pasaría inadvertido (sin secreto ni IP real).
+  it('no hace rewrites en Vercel aunque BACKEND_URL esté definido', async () => {
+    process.env.BACKEND_URL = 'https://api.example.test'
+    process.env.VERCEL = '1'
+    const rewrites = await nextConfig.rewrites()
+    delete process.env.BACKEND_URL
+    delete process.env.VERCEL
+
+    expect(rewrites).toEqual([])
+  })
+
+  it('no hace rewrites sin BACKEND_URL', async () => {
+    delete process.env.BACKEND_URL
+    expect(await nextConfig.rewrites()).toEqual([])
+  })
 })
