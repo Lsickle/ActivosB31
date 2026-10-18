@@ -24,6 +24,7 @@ enum SecurityEventType: string
     case RolePermissionsUpdated = 'role_permissions_updated';
     case SettingsUpdated = 'settings_updated';
     case ReportExported = 'report_exported';
+    case SignatureIntegrityFailed = 'signature_integrity_failed';
 
     public function label(): string
     {
@@ -44,6 +45,7 @@ enum SecurityEventType: string
             self::RolePermissionsUpdated => 'Matriz de permisos modificada',
             self::SettingsUpdated => 'Ajustes modificados',
             self::ReportExported => 'Reporte exportado',
+            self::SignatureIntegrityFailed => 'Firma de entrega alterada o faltante',
         };
     }
 }

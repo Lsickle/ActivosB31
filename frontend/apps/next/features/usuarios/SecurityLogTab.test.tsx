@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Paginated, SecurityEvent, UserRecord } from 'app/features/usuarios/api'
-import { SecurityLogTab } from './SecurityLogTab'
+import { describeSecurityEvent, SecurityLogTab } from './SecurityLogTab'
 
 const listSecurityEvents = vi.fn()
 const listSecurityEventTypes = vi.fn()
@@ -211,5 +211,141 @@ describe('SecurityLogTab (003 US3, FR-008)', () => {
     render(<SecurityLogTab />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No fue posible cargar la bitácora.')
+  })
+})
+
+function lines(overrides: Partial<SecurityEvent>): string[] {
+  return describeSecurityEvent(securityEvent(overrides)).map((line) => line.text)
+}
+
+describe('describeSecurityEvent: eventos agregados después de 003', () => {
+  it('settings_updated: anticipación de alertas de vencimiento', () => {
+    expect(
+      lines({
+        event: 'settings_updated',
+        event_label: 'Ajustes modificados',
+        target_user: null,
+        metadata: { changes: { expiry_alert_days: [30, 45] } },
+      })
+    ).toEqual(['Anticipación de alertas de vencimiento (días): 30 → 45'])
+  })
+
+  it('report_exported: reporte, formato, sujeto y filtros traducidos', () => {
+    expect(
+      lines({
+        event: 'report_exported',
+        event_label: 'Reporte exportado',
+        target_user: null,
+        metadata: {
+          report: 'asset_type',
+          subject_id: 4,
+          format: 'xlsx',
+          filters: { asset_category_id: 2, asset_type_id: 4, location_id: 7, status: 'available', from: '2026-10-01', to: '2026-10-17' },
+          personal_data: false,
+        },
+      })
+    ).toEqual([
+      'Reporte: Por tipo de artículo',
+      'Formato: Excel',
+      'Sujeto: #4',
+      'Filtros: Categoría=2, Tipo=4, Ubicación=7, Estado=available, Desde=2026-10-01, Hasta=2026-10-17',
+    ])
+  })
+
+  it.each([
+    ['inventory', 'Inventario general'],
+    ['employee', 'Por empleado'],
+    ['asset', 'Por activo'],
+    ['asset_type', 'Por tipo de artículo'],
+  ])('report_exported: nombre del reporte %s', (report, label) => {
+    expect(
+      lines({ event: 'report_exported', metadata: { report, subject_id: null, format: 'pdf', filters: {}, personal_data: false } })
+    ).toEqual([`Reporte: ${label}`, 'Formato: PDF'])
+  })
+
+  it('report_exported: marca resaltada si incluye datos personales', () => {
+    const detail = describeSecurityEvent(
+      securityEvent({
+        event: 'report_exported',
+        metadata: { report: 'employee', subject_id: 12, format: 'pdf', filters: [], personal_data: true },
+      })
+    )
+    expect(detail.map((line) => line.text)).toEqual(['Reporte: Por empleado', 'Formato: PDF', 'Sujeto: #12', 'Incluye datos personales'])
+    expect(detail.at(-1)?.highlight).toBe(true)
+    expect(detail.slice(0, -1).every((line) => !line.highlight)).toBe(true)
+  })
+
+  it('signature_integrity_failed: entrega y motivo', () => {
+    expect(
+      lines({
+        event: 'signature_integrity_failed',
+        event_label: 'Firma de entrega alterada o faltante',
+        actor: null,
+        target_user: null,
+        metadata: { delivery_id: 5, code: 'ENT-2026-0005', reason: 'altered' },
+      })
+    ).toEqual(['Entrega: ENT-2026-0005', 'Motivo: firma alterada'])
+    expect(
+      lines({ event: 'signature_integrity_failed', metadata: { delivery_id: 6, code: 'ENT-2026-0006', reason: 'missing' } })
+    ).toEqual(['Entrega: ENT-2026-0006', 'Motivo: archivo faltante'])
+  })
+
+  it('signature_integrity_failed sin código usa el id de la entrega', () => {
+    expect(lines({ event: 'signature_integrity_failed', metadata: { delivery_id: 6, reason: 'missing' } })).toEqual([
+      'Entrega: #6',
+      'Motivo: archivo faltante',
+    ])
+  })
+
+  it('user_created: empleado vinculado como objeto o como texto', () => {
+    expect(
+      lines({ event: 'user_created', metadata: { role: 'Almacenista', employee: { id: 3, name: 'Ana Gómez' } } })
+    ).toEqual(['Rol: Almacenista', 'Empleado vinculado: Ana Gómez'])
+    expect(lines({ event: 'user_created', metadata: { role: 'Almacenista', employee: 'Ana Gómez' } })).toEqual([
+      'Rol: Almacenista',
+      'Empleado vinculado: Ana Gómez',
+    ])
+  })
+
+  it('user_updated: cambio de empleado vinculado como objetos, texto o null', () => {
+    expect(
+      lines({
+        event: 'user_updated',
+        metadata: { changes: { employee: [null, { id: 3, name: 'Ana Gómez' }] } },
+      })
+    ).toEqual(['Empleado vinculado: — → Ana Gómez'])
+    expect(
+      lines({ event: 'user_updated', metadata: { changes: { employee: [{ id: 3, name: 'Ana Gómez' }, 'Luis Ruiz'] } } })
+    ).toEqual(['Empleado vinculado: Ana Gómez → Luis Ruiz'])
+  })
+
+  it('account_unlocked desde la consola', () => {
+    expect(lines({ event: 'account_unlocked', event_label: 'Cuenta desbloqueada', actor: null, metadata: { channel: 'cli' } })).toEqual([
+      'Canal: consola',
+    ])
+  })
+
+  it('login_failed conserva sus motivos (no se confunden con los de la firma)', () => {
+    expect(lines({ event: 'login_failed', metadata: { reason: 'locked' } })).toEqual(['Motivo: cuenta bloqueada'])
+  })
+
+  it('muestra resaltado el aviso de datos personales en la tabla', async () => {
+    listSecurityEvents.mockResolvedValue(
+      page([
+        securityEvent({
+          id: 20,
+          event: 'report_exported',
+          event_label: 'Reporte exportado',
+          target_user: null,
+          metadata: { report: 'employee', subject_id: 12, format: 'xlsx', filters: {}, personal_data: true },
+        }),
+      ])
+    )
+    render(<SecurityLogTab />)
+
+    const row = await screen.findByRole('row', { name: /Reporte exportado/ })
+    expect(within(row).getByText('Formato: Excel')).toBeInTheDocument()
+    const warning = within(row).getByText('Incluye datos personales')
+    expect(warning.tagName).toBe('STRONG')
   })
 })

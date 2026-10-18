@@ -124,7 +124,11 @@ security_events(id, event varchar(50) idx,      -- App\Enums\SecurityEventType: 
                                                 --   metadata {changes:{expiry_alert_days:[antes, después]}}),
                                                 -- report_exported (R-3 de 008: descarga xlsx/pdf de un reporte,
                                                 --   metadata {report: inventory|employee|asset|asset_type,
-                                                --   subject_id|null, format, filters, personal_data: bool})
+                                                --   subject_id|null, format, filters, personal_data: bool}),
+                                                -- signature_integrity_failed (M-3 de 007/008: comando
+                                                --   deliveries:verify-signatures, sin actor ni IP; metadata
+                                                --   {delivery_id, code, reason: altered|missing}; no se repite
+                                                --   para la misma entrega y razón dentro de 24 h)
                 actor_id FK -> users NULL idx,  -- quién lo hizo; NULL en login_failed y account_locked (no autenticado)
                 target_user_id FK -> users NULL idx, target_role_id FK -> roles NULL,
                 login_attempted varchar(255) NULL,  -- texto ingresado, solo en login_failed (D-005); nunca la contraseña

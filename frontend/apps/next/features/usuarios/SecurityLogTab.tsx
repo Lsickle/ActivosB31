@@ -45,6 +45,10 @@ const FIELD_LABELS: Record<string, string> = {
   description: 'Descripción',
   is_active: 'Estado',
   must_change_password: 'Cambio de contraseña pendiente',
+  // RN-015: vínculo usuario-empleado ({id, name}; en eventos antiguos, texto).
+  employee: 'Empleado vinculado',
+  // settings_updated (Ajustes).
+  expiry_alert_days: 'Anticipación de alertas de vencimiento (días)',
 }
 
 const LOGIN_FAILED_REASONS: Record<string, string> = {
@@ -53,9 +57,43 @@ const LOGIN_FAILED_REASONS: Record<string, string> = {
   inactive: 'cuenta inactiva',
 }
 
+const SIGNATURE_FAILURE_REASONS: Record<string, string> = {
+  altered: 'firma alterada',
+  missing: 'archivo faltante',
+}
+
 const CHANNELS: Record<string, string> = {
   web: 'web',
   token: 'token (aplicación móvil)',
+  cli: 'consola',
+}
+
+// report_exported (008, R-3): claves que registra ReportResponder en el backend.
+const REPORT_NAMES: Record<string, string> = {
+  inventory: 'Inventario general',
+  employee: 'Por empleado',
+  asset: 'Por activo',
+  asset_type: 'Por tipo de artículo',
+}
+
+const REPORT_FORMATS: Record<string, string> = {
+  xlsx: 'Excel',
+  pdf: 'PDF',
+}
+
+const REPORT_FILTER_LABELS: Record<string, string> = {
+  asset_category_id: 'Categoría',
+  asset_type_id: 'Tipo',
+  location_id: 'Ubicación',
+  status: 'Estado',
+  from: 'Desde',
+  to: 'Hasta',
+}
+
+export type SecurityEventDetailLine = {
+  text: string
+  // Se muestra resaltada (p. ej. exportación con datos personales, Ley 1581).
+  highlight?: boolean
 }
 
 function formatValue(value: unknown): string {
@@ -69,14 +107,77 @@ function formatValue(value: unknown): string {
   return String(value)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isPresent(value: unknown): boolean {
+  return value !== null && value !== undefined && value !== ''
+}
+
+function describeChanges(value: unknown): string[] {
+  if (!isRecord(value)) return []
+  return Object.entries(value).map(([field, change]) => {
+    const label = FIELD_LABELS[field] ?? field
+    if (Array.isArray(change) && change.length === 2) {
+      return `${label}: ${formatValue(change[0])} → ${formatValue(change[1])}`
+    }
+    return `${label}: ${formatValue(change)}`
+  })
+}
+
+function describeUnknown(metadata: Record<string, unknown>): SecurityEventDetailLine[] {
+  return Object.entries(metadata).map(([key, value]) => ({ text: `${key}: ${formatValue(value)}` }))
+}
+
+function describeReportExported(metadata: Record<string, unknown>): SecurityEventDetailLine[] {
+  const { report, subject_id: subjectId, format, filters, personal_data: personalData, ...rest } = metadata
+  const lines: SecurityEventDetailLine[] = []
+  if (isPresent(report)) lines.push({ text: `Reporte: ${REPORT_NAMES[String(report)] ?? formatValue(report)}` })
+  if (isPresent(format)) lines.push({ text: `Formato: ${REPORT_FORMATS[String(format)] ?? formatValue(format)}` })
+  if (isPresent(subjectId)) lines.push({ text: `Sujeto: #${String(subjectId)}` })
+  // Sin filtros, PHP serializa el arreglo vacío como [] en vez de {}.
+  if (isRecord(filters)) {
+    const parts = Object.entries(filters)
+      .filter(([, value]) => isPresent(value))
+      .map(([key, value]) => `${REPORT_FILTER_LABELS[key] ?? key}=${formatValue(value)}`)
+    if (parts.length > 0) lines.push({ text: `Filtros: ${parts.join(', ')}` })
+  }
+  if (personalData === true) lines.push({ text: 'Incluye datos personales', highlight: true })
+  return [...lines, ...describeUnknown(rest)]
+}
+
+function describeSignatureIntegrityFailed(metadata: Record<string, unknown>): SecurityEventDetailLine[] {
+  const { delivery_id: deliveryId, code, reason, ...rest } = metadata
+  const lines: SecurityEventDetailLine[] = []
+  if (typeof code === 'string' && code !== '') {
+    lines.push({ text: `Entrega: ${code}` })
+  } else if (isPresent(deliveryId)) {
+    lines.push({ text: `Entrega: #${String(deliveryId)}` })
+  }
+  if (isPresent(reason)) {
+    lines.push({ text: `Motivo: ${SIGNATURE_FAILURE_REASONS[String(reason)] ?? formatValue(reason)}` })
+  }
+  return [...lines, ...describeUnknown(rest)]
+}
+
 // Convierte `metadata` (contracts/api.md, tabla de eventos) en líneas legibles.
 // Las claves desconocidas se muestran tal cual para no ocultar información.
-export function describeSecurityEvent(event: SecurityEvent): string[] {
-  const lines: string[] = []
+// report_exported y signature_integrity_failed tienen formato propio porque
+// sus claves (p. ej. `reason`) no significan lo mismo que en el resto.
+export function describeSecurityEvent(event: SecurityEvent): SecurityEventDetailLine[] {
+  const lines: SecurityEventDetailLine[] = []
   if (event.login_attempted) {
-    lines.push(`Usuario ingresado: ${event.login_attempted}`)
+    lines.push({ text: `Usuario ingresado: ${event.login_attempted}` })
   }
   const metadata = event.metadata ?? {}
+  if (event.event === 'report_exported') return [...lines, ...describeReportExported(metadata)]
+  if (event.event === 'signature_integrity_failed') return [...lines, ...describeSignatureIntegrityFailed(metadata)]
+  return [...lines, ...describeGeneric(metadata).map((text) => ({ text }))]
+}
+
+function describeGeneric(metadata: Record<string, unknown>): string[] {
+  const lines: string[] = []
   for (const [key, value] of Object.entries(metadata)) {
     switch (key) {
       case 'reason':
@@ -101,16 +202,7 @@ export function describeSecurityEvent(event: SecurityEvent): string[] {
         if (Array.isArray(value) && value.length > 0) lines.push(`Quitados: ${formatValue(value)}`)
         break
       case 'changes':
-        if (value && typeof value === 'object') {
-          for (const [field, change] of Object.entries(value as Record<string, unknown>)) {
-            const label = FIELD_LABELS[field] ?? field
-            if (Array.isArray(change) && change.length === 2) {
-              lines.push(`${label}: ${formatValue(change[0])} → ${formatValue(change[1])}`)
-            } else {
-              lines.push(`${label}: ${formatValue(change)}`)
-            }
-          }
-        }
+        lines.push(...describeChanges(value))
         break
       default:
         lines.push(`${FIELD_LABELS[key] ?? key}: ${formatValue(value)}`)
@@ -225,7 +317,7 @@ export function SecurityLogTab() {
             <ul className="flex flex-col gap-0.5 text-xs">
               {lines.map((line, index) => (
                 <li key={index} className="break-words">
-                  {line}
+                  {line.highlight ? <strong className="font-semibold text-destructive">{line.text}</strong> : line.text}
                 </li>
               ))}
             </ul>
