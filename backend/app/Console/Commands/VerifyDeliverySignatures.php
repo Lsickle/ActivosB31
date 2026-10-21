@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Date;
 
 /**
  * M-3 (revisión de seguridad de 007/008): verifica que la firma de cada
- * entrega (RN-024 / D-002) siga en el disco ASSETS_DISK con el SHA-256
+ * entrega (RN-024 / D-002) siga en el disco SIGNATURES_DISK con el SHA-256
  * registrado al crearla (Delivery::signatureIntact()).
  *
  * Cada firma alterada o faltante queda en la bitácora como

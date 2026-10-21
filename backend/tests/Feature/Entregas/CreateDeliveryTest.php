@@ -10,7 +10,9 @@ use App\Models\Delivery;
 use App\Models\Employee;
 use App\Models\InventoryMovement;
 use App\Models\StockLevel;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -347,4 +349,34 @@ it('D-003 de 006: sacar existencias de un tipo luego desactivado sí se permite'
     $this->scenario['gloves']->forceFill(['is_active' => false])->save();
 
     $this->postJson('/api/deliveries', deliveryPayload($this->scenario))->assertCreated();
+});
+
+it('D-002 / decisión 45: la firma se guarda en el disco de firmas (SIGNATURES_DISK), no en el de fotos', function () {
+    Storage::fake('firmas');
+    config(['filesystems.signatures_disk' => 'firmas']);
+
+    $response = $this->postJson('/api/deliveries', deliveryPayload($this->scenario))->assertCreated();
+    $delivery = Delivery::query()->findOrFail($response->json('data.id'));
+
+    expect(Storage::disk('firmas')->allFiles('signatures'))->toBe([$delivery->signature_path])
+        ->and(Storage::disk('local')->allFiles('signatures'))->toBe([])
+        ->and($delivery->signatureIntact())->toBeTrue()
+        ->and($delivery->signatureUrl())->toContain('signatures');
+});
+
+it('B2 (revisión de la migración a B2): si no se puede borrar la firma huérfana, el reporte trae su ruta', function () {
+    Exceptions::fake();
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('put')->once()->andReturnFalse();
+    $disk->shouldReceive('delete')->once()->andThrow(new RuntimeException('AccessDenied: deleteFiles'));
+    Storage::set('firmas_sin_borrado', $disk);
+    config(['filesystems.signatures_disk' => 'firmas_sin_borrado']);
+
+    $this->postJson('/api/deliveries', deliveryPayload($this->scenario))->assertServerError();
+
+    Exceptions::assertReported(function (RuntimeException $exception) {
+        return preg_match('#^No se pudo borrar la firma huérfana signatures/\d+\.png #', $exception->getMessage()) === 1
+            && $exception->getPrevious()?->getMessage() === 'AccessDenied: deleteFiles';
+    });
+    expect(Delivery::query()->count())->toBe(0);
 });

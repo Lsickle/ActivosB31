@@ -39,9 +39,11 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * M-4 (revisión de seguridad de 005): en producción las fotos de activos
-     * van al bucket privado de R2 (docs/infraestructura.md). El disco local
-     * de Render es efímero y "public" las expondría sin URL firmada.
+     * M-4 (revisión de seguridad de 005) y decisiones 44 y 45: en producción
+     * las fotos de activos van al bucket privado de fotos de Backblaze B2 y
+     * las firmas de entregas (D-002) a su propio bucket con Object Lock
+     * (docs/infraestructura.md). El disco local de Render es efímero y
+     * "public" las expondría sin URL firmada.
      *
      * Se omite en package:discover: `composer install` lo ejecuta al
      * construir la imagen, sin las variables de Render y con APP_ENV
@@ -49,10 +51,52 @@ class AppServiceProvider extends ServiceProvider
      */
     private function ensureProductionAssetsDisk(): void
     {
-        $disk = config('filesystems.assets_disk');
+        if (! $this->app->isProduction() || $this->app->runningConsoleCommand('package:discover')) {
+            return;
+        }
 
-        if ($this->app->isProduction() && $disk !== 'r2' && ! $this->app->runningConsoleCommand('package:discover')) {
-            throw new RuntimeException('En producción las fotos de activos deben guardarse en R2: defina ASSETS_DISK=r2 (valor actual: '.var_export($disk, true).').');
+        $assetsDisk = config('filesystems.assets_disk');
+
+        if ($assetsDisk !== 'b2') {
+            throw new RuntimeException('En producción las fotos de activos deben guardarse en Backblaze B2: defina ASSETS_DISK=b2 (valor actual: '.var_export($assetsDisk, true).').');
+        }
+
+        $signaturesDisk = config('filesystems.signatures_disk');
+
+        if ($signaturesDisk !== 'b2_firmas') {
+            throw new RuntimeException('En producción las firmas de entregas deben guardarse en su bucket de Backblaze B2 con Object Lock: defina SIGNATURES_DISK=b2_firmas (valor actual: '.var_export($signaturesDisk, true).').');
+        }
+
+        $this->ensureSeparateSignaturesStorage();
+    }
+
+    /**
+     * M1 (revisión de seguridad de la migración a B2): las firmas no pueden
+     * compartir bucket ni llave con las fotos; si no, la llave de fotos (con
+     * deleteFiles) llegaría a las firmas o el Object Lock alcanzaría a las
+     * fotos. Los mensajes solo nombran variables, nunca sus valores.
+     */
+    private function ensureSeparateSignaturesStorage(): void
+    {
+        $settings = [
+            'B2_BUCKET' => config('filesystems.disks.b2.bucket'),
+            'B2_ACCESS_KEY_ID' => config('filesystems.disks.b2.key'),
+            'B2_SIGNATURES_BUCKET' => config('filesystems.disks.b2_firmas.bucket'),
+            'B2_SIGNATURES_ACCESS_KEY_ID' => config('filesystems.disks.b2_firmas.key'),
+        ];
+
+        $missing = array_keys(array_filter($settings, fn (mixed $value) => ! is_string($value) || trim($value) === ''));
+
+        if ($missing !== []) {
+            throw new RuntimeException('En producción faltan variables de Backblaze B2: '.implode(', ', $missing).'.');
+        }
+
+        if ($settings['B2_SIGNATURES_BUCKET'] === $settings['B2_BUCKET']) {
+            throw new RuntimeException('En producción B2_SIGNATURES_BUCKET debe ser distinto de B2_BUCKET: las firmas van en su propio bucket con Object Lock.');
+        }
+
+        if (hash_equals($settings['B2_ACCESS_KEY_ID'], $settings['B2_SIGNATURES_ACCESS_KEY_ID'])) {
+            throw new RuntimeException('En producción B2_SIGNATURES_ACCESS_KEY_ID debe ser distinto de B2_ACCESS_KEY_ID: las firmas usan su propia llave sin deleteFiles.');
         }
     }
 

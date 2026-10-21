@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use League\Flysystem\UnableToReadFile;
 
 /**
@@ -24,8 +25,9 @@ use League\Flysystem\UnableToReadFile;
  * (US1-6). Se crea únicamente con App\Actions\Entregas\CreateDelivery.
  *
  * - D-001: el consecutivo `code` (ENT-000001) lo asigna la base de datos.
- * - D-002: la firma es un PNG privado en el disco ASSETS_DISK; se sirve con
- *   URL temporal.
+ * - D-002: la firma es un PNG privado en el disco SIGNATURES_DISK (en
+ *   producción b2_firmas, bucket propio con Object Lock); se sirve con URL
+ *   temporal.
  * - D-005: el estado (abierta, cerrada, vencida) se deriva de los ítems.
  * - M-3: signature_sha256 es la huella del PNG de la firma (signatureIntact()).
  *
@@ -209,11 +211,13 @@ class Delivery extends Model
     }
 
     /**
-     * D-002: disco privado de las firmas (el mismo de las fotos, ASSETS_DISK).
+     * D-002 y decisión 45: disco privado de las firmas (SIGNATURES_DISK; en
+     * producción el bucket de firmas de B2 con Object Lock, aparte del de
+     * las fotos).
      */
     public static function signatureDisk(): Filesystem
     {
-        return Asset::photoDisk();
+        return Storage::disk(config('filesystems.signatures_disk'));
     }
 
     public static function signaturePathFor(int $deliveryId): string

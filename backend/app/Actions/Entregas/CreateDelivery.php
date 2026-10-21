@@ -3,7 +3,6 @@
 namespace App\Actions\Entregas;
 
 use App\Actions\Activos\AssignAsset;
-use App\Actions\Activos\StoreAssetPhoto;
 use App\Actions\Inventario\RecordStockMovement;
 use App\Enums\AssetStatus;
 use App\Enums\DeliveryKind;
@@ -18,6 +17,7 @@ use App\Models\Employee;
 use App\Models\Location;
 use App\Models\StockLevel;
 use App\Models\User;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -123,10 +123,29 @@ class CreateDelivery
             });
         } catch (Throwable $exception) {
             if ($signaturePath !== null) {
-                StoreAssetPhoto::deleteQuietly($disk, $signaturePath);
+                $this->deleteOrphanSignature($disk, $signaturePath);
             }
 
             throw $exception;
+        }
+    }
+
+    /**
+     * B2 (revisión de seguridad de la migración a B2): en producción la llave
+     * de firmas no tiene deleteFiles y el bucket tiene Object Lock, así que
+     * borrar la firma de una entrega revertida puede fallar. No interrumpe
+     * la respuesta, pero se reporta con la ruta (signatures/<id>.png, sin
+     * datos personales) para poder ubicar el archivo huérfano en el bucket.
+     */
+    private function deleteOrphanSignature(Filesystem $disk, string $path): void
+    {
+        try {
+            $disk->delete($path);
+        } catch (Throwable $exception) {
+            report(new RuntimeException(
+                "No se pudo borrar la firma huérfana {$path} de una entrega revertida (queda en el disco de firmas).",
+                previous: $exception,
+            ));
         }
     }
 

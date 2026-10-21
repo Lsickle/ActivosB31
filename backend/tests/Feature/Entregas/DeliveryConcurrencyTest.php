@@ -70,7 +70,7 @@ function removeDeliveryConcurrencyFixtures(Connection $db, array $ids): void
     $deliveryIds = $db->table('deliveries')->where('from_location_id', $ids['location'])->pluck('id')->all();
 
     foreach ($deliveryIds as $deliveryId) {
-        Storage::disk(config('filesystems.assets_disk'))->delete(Delivery::signaturePathFor($deliveryId));
+        Storage::disk(config('filesystems.signatures_disk'))->delete(Delivery::signaturePathFor($deliveryId));
     }
 
     $db->transaction(function () use ($db, $ids, $deliveryIds) {
@@ -105,7 +105,7 @@ it('D-003 / SC-002: dos entregas simultáneas del mismo activo: solo una pasa', 
     $processes = [];
     // El disco es el local real (los procesos hijos no ven Storage::fake) y puede
     // tener firmas del entorno de desarrollo: solo cuentan las creadas aquí.
-    $signaturesBefore = Storage::disk(config('filesystems.assets_disk'))->files('signatures');
+    $signaturesBefore = Storage::disk(config('filesystems.signatures_disk'))->files('signatures');
 
     try {
         $locker->beginTransaction();
@@ -152,7 +152,7 @@ it('D-003 / SC-002: dos entregas simultáneas del mismo activo: solo una pasa', 
             ->and($db->table('asset_events')->where('asset_id', $ids['asset'])->where('event', 'delivered')->count())->toBe(1)
             ->and($db->table('deliveries')->where('id', $deliveryId)->value('employee_id'))->toBe($asset->holder_employee_id)
             // La entrega rechazada no dejó firma huérfana: solo existe la de la aceptada.
-            ->and(collect(Storage::disk(config('filesystems.assets_disk'))->files('signatures'))
+            ->and(collect(Storage::disk(config('filesystems.signatures_disk'))->files('signatures'))
                 ->diff($signaturesBefore)
                 ->filter(fn (string $path) => in_array($path, array_map(Delivery::signaturePathFor(...), range($deliveryId - 1, $deliveryId + 1)), true))
                 ->values()->all())->toBe([Delivery::signaturePathFor($deliveryId)]);

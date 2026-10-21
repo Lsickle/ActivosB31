@@ -34,9 +34,10 @@ La arquitectura y el stack replican los de **EcoLink-Platform** (`C:\Programar\E
 | Dev local | Laravel Sail (Docker) |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) |
 | Despliegue | Backend en **Render** (`backend/Dockerfile.render`), frontend en **Vercel** |
+| Archivos y respaldos (producción) | **Backblaze B2** por su API S3 (decisión 44, 2026-10-21; antes Cloudflare R2): buckets privados `activosb31-fotos` (disco `b2`), `activosb31-firmas` (disco `b2_firmas`, Object Lock) y `activosb31-respaldos` (rclone `b2`) |
 | Móvil | Sin app todavía. `frontend/packages/app` queda listo para agregar Expo después. |
 
-Pendiente de decidir con el usuario (no fijar sin confirmar): base de datos de producción (Render PostgreSQL u otro proveedor), almacenamiento de archivos (fotos de activos, actas), envío de correo, formato de exportación de reportes (PDF/Excel).
+Pendiente de decidir con el usuario (no fijar sin confirmar): base de datos de producción (Render PostgreSQL u otro proveedor), envío de correo, formato de exportación de reportes (PDF/Excel).
 
 ### Cuentas de servicios externos
 
@@ -113,29 +114,31 @@ Construido y probado:
 - **Features 003 a 008** (`specs/003..008`), todas con TDD, revisión de `especialista-seguridad` aplicada y verificación en navegador contra el backend real:
   - 003 seguridad: bitácora inmutable (`security_events`, trigger), bloqueo 5 fallos / 15 min (RN-034), desbloqueo por UI y `php artisan security:unlock`, IP con `trustProxies('REMOTE_ADDR')`.
   - 004 empleados (RN-021, RN-022, RN-035, RN-036, RN-040): cargos y compañías en Configuración, vínculo usuario-empleado (RN-015); Consulta sin `empleados.ver`.
-  - 005 activos (RN-005..RN-008, RN-029..RN-031, RN-039): estados, historial inmutable, fotos re-codificadas sin EXIF (≤4 MB, disco `ASSETS_DISK`, R2 en producción), planes de mantenimiento por activo, vencimientos, alertas, `app_settings`.
+  - 005 activos (RN-005..RN-008, RN-029..RN-031, RN-039): estados, historial inmutable, fotos re-codificadas sin EXIF (≤4 MB, disco `ASSETS_DISK`, B2 en producción), planes de mantenimiento por activo, vencimientos, alertas, `app_settings`.
   - 006 inventario (RN-027, RN-028, RN-037, RN-038): existencias, movimientos inmutables (`RecordStockMovement` es la única vía), conteos físicos, stock mínimo.
   - 007 entregas (RN-023..RN-026): consecutivo ENT-, firma PNG con huella SHA-256, devoluciones con estado, tenencias, alertas de préstamos vencidos.
   - 008 reportes (RN-032, RN-033): inventario, por empleado y por artículo en JSON/Excel/PDF; tablero de Inicio con alertas por permiso; exportaciones en la bitácora.
   - Suites: 797 tests Pest y 438 Vitest en verde. Librerías verificadas en `docs/infraestructura.md`.
 - **Acta PDF y logo (2026-10-21, RN-041)**: `GET /api/deliveries/{id}/pdf` (permisos `view` + `viewSignature`, throttle `report-downloads`, 409 + `signature_integrity_failed` si la firma no es el PNG íntegro, evento `delivery_pdf_exported`, leyenda de copia en el pie, sin documento del empleado). Todo PDF pasa por `App\Pdf\PdfRenderer` (solo `data://` en tiempo de ejecución; la config global de dompdf sigue cerrada) con el layout `resources/views/pdf/layout.blade.php`: logo arriba a la derecha y marca de agua centrada en cada página. Logo: `backend/resources/branding/logo-b31.png` (≤ 300 KB y ≤ 2000 px; si falta o se pasa, PDF sin logo) y copia en `frontend/apps/next/public/logo-b31.png` y `app/icon.png` (favicon); componente `BrandLogo` en login, sidebar, barra superior e Inicio. Revisión de `especialista-seguridad` aplicada (M-1 lectura única de la firma, B-1 topes del logo). 882 tests Pest y 472 Vitest en verde.
   - El error "Jest worker encountered 2 child process exceptions" en `/entregas/[id]` era un `next dev` huérfano con la salida a una tubería cerrada (EPIPE); no era código. Si reaparece, detener el proceso del puerto 3001, borrar `apps/next/.next` y arrancar de nuevo.
+- **Almacenamiento en Backblaze B2 (2026-10-21, decisiones 44 a 47)**: reemplaza a Cloudflare R2. Discos `b2` (fotos, `ASSETS_DISK=b2`) y `b2_firmas` (firmas, nueva clave `filesystems.signatures_disk` / `SIGNATURES_DISK=b2_firmas`, con su propio bucket y llave; por defecto igual a `ASSETS_DISK`, así local y tests siguen en `local`); `Delivery::signatureDisk()` usa `signatures_disk`. El chequeo M-4 exige ambos valores en producción. Disco `r2` retirado. Respaldo con el backend nativo `b2` de rclone (`BACKUP_B2_KEY_ID`, `BACKUP_B2_APPLICATION_KEY`, `BACKUP_B2_BUCKET`). Guía en `docs/despliegue.md`, sección 2.
 - **Preguntas pendientes del usuario 26 a 36**: tabla al final de `docs/modulos.md` (33A ya implementada de forma provisional).
 
 Siguiente paso sugerido:
 1. Resolver las preguntas 26 a 36 y aplicar lo que cambie.
 2. Pendientes de seguridad "antes de datos reales" (abajo).
-3. Primer despliegue según `docs/despliegue.md`: Neon (`aws-us-east-1`), Render (Virginia), R2 (bucket de fotos y otro de respaldos), Vercel. Requiere las cuentas del usuario.
+3. Primer despliegue según `docs/despliegue.md`: Neon (`aws-us-east-1`), Backblaze B2 (US East; buckets de fotos, firmas y respaldos), Render (Virginia), Vercel. Requiere las cuentas del usuario.
 
 Entorno local: si los tests se corren como root dentro del contenedor, después ejecutar `docker compose exec -u root laravel.test chown -R sail:sail storage bootstrap/cache` (si no, la app no puede escribir firmas, fotos ni exportaciones). El `backend/.env` local necesita `LOCAL_DISK_SERVE=true` para servir fotos y firmas.
 
 ## Despliegue (preparado, pendiente de conectar)
 
-Guía paso a paso: **`docs/despliegue.md`** (Neon, R2, Render, Cron Jobs, Vercel y las pruebas obligatorias del primer deploy). Resumen:
+Guía paso a paso: **`docs/despliegue.md`** (Neon, Backblaze B2, Render, Cron Jobs, Vercel y las pruebas obligatorias del primer deploy). Resumen:
 
 - **Render** (backend): Web Service Docker (Starter, Virginia), Root Directory `backend`, `Dockerfile.render` con **FrankenPHP 1.13.1 en modo clásico** (`backend/docker/Caddyfile`, usuario no root, health check `/up`). Al arrancar solo `php artisan optimize`; **migraciones y seeder van en el Pre-Deploy Command** con la conexión directa de Neon (`DB_MIGRATION_URL`). El seeder es idempotente y, en producción, falla si falta `ADMIN_INITIAL_PASSWORD` al tener que crear el admin (nunca genera ni imprime una contraseña); tras el primer deploy, borrarla de Render. **`SESSION_DOMAIN` vacío** (cookie host-only; `.vercel.app` está en la Public Suffix List); cookie `secure` por defecto con `APP_ENV=production`.
 - **Neon**: rol dueño para migraciones (directa) y `activosb31_app` / `activosb31_backup` de mínimo privilegio con `ops/neon/roles.sql` (después del primer Pre-Deploy).
-- **Cron Jobs de Render**: mantenimiento con la imagen de la app (`sanctum:prune-expired` diario y `deliveries:verify-signatures` los domingos, en un solo comando) y respaldo diario `pg_dump` a R2 con `ops/backup/`.
+- **Cron Jobs de Render**: mantenimiento con la imagen de la app (`sanctum:prune-expired` diario y `deliveries:verify-signatures` los domingos, en un solo comando) y respaldo diario `pg_dump` a B2 (bucket `activosb31-respaldos`) con `ops/backup/`.
+- **Backblaze B2** (decisiones 44 a 47, 2026-10-21): cuenta en región US East (irreversible), 2FA, topes y alertas; tres buckets privados con una *application key* por bucket (nunca la master key): fotos (lectura, escritura y borrado; lifecycle "solo la última versión"), firmas (Object Lock al crear: governance en pruebas, **compliance 1825 días antes de la primera firma real**; llave sin `deleteFiles` ni `bypassGovernance`) y respaldos (Object Lock 30 días para `daily/` y `monthly/`, lifecycle 35/365 días; llave sin `deleteFiles` ni `bypassGovernance`). Prueba de humo antes de datos reales (sección 2.6).
 - **Vercel** (frontend): Root Directory `frontend/apps/next`, `BACKEND_URL`, `VERCEL_PROXY_SECRET` y `NEXT_PUBLIC_API_URL` vacío. `vercel.json` hace de proxy de `/api` y `/sanctum` con la cabecera `X-Proxy-Secret` (validada por `TrustVercelProxy`); debe probarse en un preview. `FRONTEND_URL` y `SANCTUM_STATEFUL_DOMAINS` del backend apuntan al dominio de Vercel. Sin preview deployments contra el backend real.
 
 ### Pendientes de seguridad (revisión de `especialista-seguridad`, 2026-10-17)
@@ -148,7 +151,7 @@ Pendiente:
 3. ~~Bitácora de seguridad y bloqueo por intentos~~ (hecho en 003). Pendiente: recuperación de contraseña por correo cuando se defina el servicio de correo.
 3b. **Antes de datos reales (revisión de seguridad de 007, Entregas)**:
    - Rol de la app en PostgreSQL sin ser dueño de las tablas y con `GRANT UPDATE (returned_quantity) ON delivery_items` por columna (además del trigger `delivery_items_guard_rows`): preparado en `ops/neon/roles.sql`, falta ejecutarlo en Neon (prueba f).
-   - *Bucket lock* / retención (object lock) de R2 sobre el prefijo `signatures/` para que las firmas no se puedan sobrescribir ni borrar.
+   - Object Lock del bucket `activosb31-firmas` de B2 (decisiones 45 y 46): governance durante las pruebas y **compliance 1825 días** antes de la primera firma real, para que las firmas no se puedan borrar (B2 no tiene lock por prefijo; ocultar o subir otra versión sigue siendo posible con `writeFiles`, la versión retenida se recupera y `deliveries:verify-signatures` lo detecta).
    - Buckets separados por entorno (local, staging, producción); nunca compartir el de producción.
    - Mencionar la firma manuscrita (dato personal) en el aviso de privacidad (Ley 1581).
    - ~~Límite de cuerpo HTTP~~ (hecho): `POST /api/deliveries` rechaza cuerpos de más de 1 MB con 413 (middleware `body.limit:1024`); Caddy corta todo cuerpo de más de 8 MB.
@@ -161,8 +164,11 @@ Pendiente:
 9. **Pendientes de la revisión de 008**: R-6 (tenencias visibles en el reporte por empleado con `reportes.ver`, mientras `/api/employees/{id}/holdings` exige `empleados.ver`); R-11 (`/api/reports/employee-options` lista exempleados: política de tratamiento, Ley 1581); B-2 residual de 007 (con solo `entregas.gestionar`, `/api/inventory/stock` muestra `min_stock`/`below_min` y la búsqueda de activos filtra por marca/modelo); R-9 (rate limit para JSON de reportes y opciones si se escala); R-4 pendiente de la pregunta 36; `max_execution_time=60` verificado con FrankenPHP en la imagen local (falta confirmarlo en Render). Resuelto: `Delivery::signatureIntact()` se usa en `php artisan deliveries:verify-signatures` (semanal, domingos 03:00 America/Bogota; registra `signature_integrity_failed` en la bitácora y sale con FAILURE si hay firmas alteradas o faltantes; corre desde el Cron Job de mantenimiento del punto 5).
 11. **Revisión de la preparación del despliegue (2026-10-18; detalle en `docs/despliegue.md`, sección 8)**. Hecho: A1-A8, B3/B9 (respaldo con `umask 077`, variables `PG*`, sin datos de tablas efímeras, verificación de `deliveries`/`security_events`, cifrado opcional con `age`). Pendiente:
    - **B1 (riesgo aceptado, pregunta 42 = B, 2026-10-21)**: las migraciones corren en el Pre-Deploy de Render, así que la credencial dueña (`DB_MIGRATION_URL`) queda en el entorno del Web Service en ejecución. Nunca en el Environment Group ni en Cron Jobs.
-   - **B3 (riesgo aceptado, pregunta 40 = no cifrar, 2026-10-21)**: respaldos sin `BACKUP_AGE_RECIPIENT`. Firmas: bucket lock de `signatures/` por 5 años (pregunta 43).
-   - **B4**: 2FA en Cloudflare (y GitHub, Render, Vercel, Neon) y bucket lock de `signatures/` antes de la primera firma real.
+   - **B3 (riesgo aceptado, pregunta 40 = no cifrar, 2026-10-21)**: respaldos sin `BACKUP_AGE_RECIPIENT`. Firmas: Object Lock del bucket de firmas por 5 años (preguntas 43 y 46). Respaldos: un solo bucket con 30 días de retención para `daily/` y `monthly/` (pregunta 47; los mensuales quedan con menos protección tras 30 días, riesgo aceptado).
+   - **B4**: 2FA en Backblaze (y GitHub, Render, Vercel, Neon) y retención compliance de 1825 días en `activosb31-firmas` antes de la primera firma real.
+   - **Revisión de seguridad de la migración a B2 (2026-10-21)**. Hecho: M1 (M-4 exige buckets y llaves de fotos y firmas presentes y distintos), B2 (firma huérfana no borrada se reporta con su ruta), M3 (llave de respaldos sin `readFiles`, rclone con `--no-check-dest`; restaurar con el panel o una llave de solo lectura fuera de Render), B5 (comentarios `SIGNATURES_DISK`). Pendiente con las cuentas: SSE-B2 en los tres buckets (B4); topes y alertas de almacenamiento (M2: lo subido a firmas en compliance queda 5 años); prueba de humo ampliada (`docs/despliegue.md` 2.6: solo archivos sueltos, nunca entregas de prueba en producción); prueba h (compliance 1825 días con `b2 bucket get` revisado por dos personas y `b2 file info` de la primera firma real; no reversible); runbook de firma oculta o suplantada (2.2). Periodo de governance en pruebas: sugerido 1 día, **pendiente de confirmar**.
+   - **M4 (Ley 1581, documental)**: el aviso y la política de tratamiento deben cubrir la firma y su retención de 5 años con base legal, respaldos hasta 365 días, datos en EE. UU. (B2 US East) y qué pasa al cumplir los 5 años (**pendiente de decidir**).
+   - **B2 sin verificar (decisión 44)**: capacidades mínimas exactas de las llaves para la API S3 y rclone, `put` real en el bucket con Object Lock con `request_checksum_calculation=when_required` (governance 1 día en pruebas, decisión 49). Se resuelve con la prueba de humo de `docs/despliegue.md` 2.6.
    - **B6**: probar `sslmode=verify-full&sslrootcert=system` en Neon (app y respaldo; la imagen de respaldo ya trae `ca-certificates` y usa `verify-full` por defecto).
    - **B7**: `trustHosts` cuando exista recuperación de contraseña por correo.
    - **B10**: quitar `ADMIN_INITIAL_PASSWORD` con redeploy, no con *Restart*.

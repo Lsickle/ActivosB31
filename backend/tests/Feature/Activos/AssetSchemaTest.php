@@ -39,14 +39,25 @@ describe('T001: almacenamiento de fotos', function () {
             ->and(config('filesystems.disks.local.visibility'))->toBe('private');
     });
 
-    it('FR-008: el disco r2 es S3 compatible con Cloudflare R2 y privado', function () {
-        expect(config('filesystems.disks.r2'))
+    // Decisiones 44 y 45 (2026-10-21): Backblaze B2 con buckets privados
+    // separados para fotos y firmas. aws-sdk-php manda CRC32 por defecto y B2
+    // lo rechaza: checksums solo cuando la operación los exige.
+    it('FR-008 / decisión 44: los discos b2 y b2_firmas son S3 compatibles con Backblaze B2 y privados', function (string $disk) {
+        expect(config("filesystems.disks.{$disk}"))
             ->driver->toBe('s3')
-            ->region->toBe('auto')
             ->use_path_style_endpoint->toBeTrue()
             ->request_checksum_calculation->toBe('when_required')
             ->response_checksum_validation->toBe('when_required')
-            ->visibility->toBe('private');
+            ->visibility->toBe('private')
+            ->throw->toBeTrue();
+    })->with(['b2', 'b2_firmas']);
+
+    it('decisión 44: el disco r2 de Cloudflare ya no existe', function () {
+        expect(config('filesystems.disks.r2'))->toBeNull();
+    });
+
+    it('decisión 45: SIGNATURES_DISK es por defecto el mismo disco de las fotos (local)', function () {
+        expect(config('filesystems.signatures_disk'))->toBe('local');
     });
 });
 

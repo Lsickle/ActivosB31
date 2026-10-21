@@ -15,7 +15,7 @@ require_once __DIR__.'/../../Support/deliveries.php';
  * de entrega (RN-024 / D-002) con Delivery::signatureIntact().
  */
 beforeEach(function () {
-    Storage::fake(config('filesystems.assets_disk'));
+    Storage::fake(config('filesystems.signatures_disk'));
 });
 
 /**

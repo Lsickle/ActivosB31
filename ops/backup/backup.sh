@@ -1,5 +1,6 @@
 #!/bin/sh
-# Respaldo de la base de datos de ActivosB31 a Cloudflare R2.
+# Respaldo de la base de datos de ActivosB31 a Backblaze B2 (decisiones 44,
+# 45 y 47: bucket privado activosb31-respaldos con Object Lock).
 #
 # 1. pg_dump en formato custom (-Fc, compresión 6) con el rol activosb31_backup
 #    (ops/neon/roles.sql, conexión directa de Neon). Sin los datos de tablas
@@ -10,9 +11,10 @@
 # 3. Si BACKUP_AGE_RECIPIENT está definido, cifra el dump con age (B3 de la
 #    revisión del despliegue) y solo sube el cifrado. Si no, advierte y sube
 #    el dump sin cifrar (pregunta 40 del usuario, pendiente; recomendado sí).
-# 4. Lo sube a r2:$BACKUP_BUCKET/daily/ y, el día 01 (UTC), también a
-#    monthly/. Retención por lifecycle del bucket (35 / 365 días) y bucket
-#    lock (30 / 365 días): ver docs/despliegue.md.
+# 4. Lo sube a b2:$BACKUP_B2_BUCKET/daily/ y, el día 01 (UTC), también a
+#    monthly/. Retención por Object Lock por defecto del bucket (30 días,
+#    decisión 47) y lifecycle (daily/ se oculta a los 35 días, monthly/ a los
+#    365; lo oculto se borra al día siguiente): ver docs/despliegue.md.
 #
 # Variables (Render, Cron Job):
 #   Conexión (B9: variables de libpq, nunca una URL en argv de pg_dump, que
@@ -21,8 +23,11 @@
 #   PGSSLMODE (por defecto verify-full) y PGSSLROOTCERT (con verify-full, por
 #   defecto system: el almacén de ca-certificates de la imagen; B6, por
 #   probar en Neon; si falla, PGSSLMODE=require mientras se resuelve).
-#   R2: BACKUP_BUCKET, BACKUP_R2_ACCESS_KEY_ID, BACKUP_R2_SECRET_ACCESS_KEY,
-#   BACKUP_R2_ENDPOINT.
+#   B2: BACKUP_B2_BUCKET (activosb31-respaldos), BACKUP_B2_KEY_ID y
+#   BACKUP_B2_APPLICATION_KEY (application key limitada a ese bucket con
+#   listBuckets, listFiles y writeFiles: sin readFiles, deleteFiles ni
+#   bypassGovernance; NUNCA la master key). Sin endpoint: rclone usa la API
+#   nativa de B2. Para restaurar se usa otra llave, fuera de Render.
 #   Cifrado (opcional): BACKUP_AGE_RECIPIENT, una o varias claves públicas de
 #   age (age1...) separadas por espacios. La clave privada NUNCA va en Render.
 # Nunca se imprimen: sin `set -x` y sin mostrar valores.
@@ -36,8 +41,17 @@ if [ -n "${BACKUP_DATABASE_URL:-}" ]; then
     exit 1
 fi
 
+# Decisión 44: el almacenamiento pasó de Cloudflare R2 a Backblaze B2.
+for var in BACKUP_BUCKET BACKUP_R2_ACCESS_KEY_ID BACKUP_R2_SECRET_ACCESS_KEY BACKUP_R2_ENDPOINT; do
+    eval "value=\${$var:-}"
+    if [ -n "$value" ]; then
+        echo "ERROR: $var era de Cloudflare R2 y ya no se usa. Defina BACKUP_B2_BUCKET, BACKUP_B2_KEY_ID y BACKUP_B2_APPLICATION_KEY y borre las variables BACKUP_BUCKET y BACKUP_R2_*." >&2
+        exit 1
+    fi
+done
+
 missing=""
-for var in PGHOST PGUSER PGPASSWORD PGDATABASE BACKUP_BUCKET BACKUP_R2_ACCESS_KEY_ID BACKUP_R2_SECRET_ACCESS_KEY BACKUP_R2_ENDPOINT; do
+for var in PGHOST PGUSER PGPASSWORD PGDATABASE BACKUP_B2_BUCKET BACKUP_B2_KEY_ID BACKUP_B2_APPLICATION_KEY; do
     eval "value=\${$var:-}"
     if [ -z "$value" ]; then
         missing="$missing $var"
@@ -59,19 +73,22 @@ fi
 export PGPASSFILE=/dev/null
 export PGSERVICEFILE=/dev/null
 
-# Remoto "r2" de rclone solo por variables de entorno (sin archivo de
-# configuración). no_check_bucket: el token es Object Read & Write de un solo
-# bucket y no puede listar ni crear buckets.
-export RCLONE_CONFIG_R2_TYPE=s3
-export RCLONE_CONFIG_R2_PROVIDER=Cloudflare
-export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID"
-export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY"
-export RCLONE_CONFIG_R2_ENDPOINT="$BACKUP_R2_ENDPOINT"
-export RCLONE_CONFIG_R2_REGION=auto
-export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
-# Sin archivo de configuración; tiempos acotados para que un R2 caído haga
+# Remoto "b2" de rclone (backend nativo de Backblaze B2) solo por variables
+# de entorno, sin archivo de configuración. hard_delete=false (el valor por
+# defecto, explícito): rclone nunca borra versiones; la limpieza la hace el
+# lifecycle del bucket y el Object Lock impide borrar antes de 30 días.
+export RCLONE_CONFIG_B2_TYPE=b2
+export RCLONE_CONFIG_B2_ACCOUNT="$BACKUP_B2_KEY_ID"
+export RCLONE_CONFIG_B2_KEY="$BACKUP_B2_APPLICATION_KEY"
+export RCLONE_CONFIG_B2_HARD_DELETE=false
+# Sin archivo de configuración; tiempos acotados para que un B2 caído haga
 # fallar el Cron Job (y se note) en vez de quedarse colgado.
-RCLONE_FLAGS="--config= --contimeout 15s --timeout 120s --retries 3 --low-level-retries 3 --stats-log-level NOTICE"
+# M3 (revisión de la migración a B2): la llave no tiene readFiles (ni
+# deleteFiles). --no-check-dest sube sin consultar antes el destino: los
+# nombres llevan fecha y hora, nunca se reemplaza nada. La verificación del
+# respaldo (pg_restore --list) es sobre el archivo local, antes de subir; la
+# comprobación posterior de rclone usa el SHA-1 que devuelve la subida.
+RCLONE_FLAGS="--config= --no-check-dest --contimeout 15s --timeout 120s --retries 3 --low-level-retries 3 --stats-log-level NOTICE"
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 name="activosb31-${timestamp}.dump"
@@ -124,11 +141,11 @@ else
 fi
 
 echo "Subiendo a daily/..."
-rclone copyto "$upload" "r2:${BACKUP_BUCKET}/daily/${upload_name}" $RCLONE_FLAGS
+rclone copyto "$upload" "b2:${BACKUP_B2_BUCKET}/daily/${upload_name}" $RCLONE_FLAGS
 
 if [ "$(date -u +%d)" = "01" ]; then
     echo "Día 01: subiendo también a monthly/..."
-    rclone copyto "$upload" "r2:${BACKUP_BUCKET}/monthly/${upload_name}" $RCLONE_FLAGS
+    rclone copyto "$upload" "b2:${BACKUP_B2_BUCKET}/monthly/${upload_name}" $RCLONE_FLAGS
 fi
 
 echo "Respaldo ${upload_name} terminado."

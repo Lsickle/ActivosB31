@@ -1,11 +1,13 @@
-# Respaldo diario de la base de datos (Neon) a Cloudflare R2. Se despliega
+# Respaldo diario de la base de datos (Neon) a Backblaze B2 (bucket
+# activosb31-respaldos, decisiones 44, 45 y 47). Se despliega
 # como Cron Job de Render (docs/despliegue.md): Root Directory = ops/backup.
 #
 # pg_dump 17.11 (cliente de la misma versión mayor que Neon, PG 17) + rclone
 # + age (cifrado opcional del dump, B3) + ca-certificates (sslrootcert=system
 # para sslmode=verify-full, B6).
-# El bucket y el token son OTROS que los de las fotos: la app no puede leer ni
-# borrar respaldos (docs/infraestructura.md).
+# El bucket y la application key son OTROS que los de las fotos y las firmas:
+# la app no puede leer ni borrar respaldos (docs/infraestructura.md). rclone
+# usa su backend nativo b2 (sin endpoint S3).
 
 FROM rclone/rclone:1.75.2 AS rclone
 

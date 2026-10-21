@@ -136,7 +136,7 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-040** — El rol **Consulta no tiene `empleados.ver`** en la precarga (RN-022); se puede conceder desde la matriz. (usuario, 2026-10-17)
 - **RN-041** — Cada entrega tiene un **acta en PDF** descargable con los artículos (cantidad, devuelta y pendiente), **quién entrega** (nombre del usuario y cargo de su empleado vinculado, si existe), **quién recibe** (nombre completo, cargo y firma) y las **devoluciones con el estado actual**, **sin número de documento** ni otros datos personales del empleado. La descarga quien ve la firma en la ficha (`entregas.ver` y además `entregas.gestionar` o `empleados.ver`); si la firma no pasa la verificación de integridad, el acta no se genera. **Todo PDF de la app** (reportes y actas) lleva el **logo de la estación** arriba a la derecha y como **marca de agua** centrada en cada página. (usuario, 2026-10-20)
 
-Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `stack-advisor` antes de fijar): archivos (fotos, firmas) en **Cloudflare R2**; base de datos de producción en **Neon** con **copia diaria (`pg_dump`) a R2**; las fotos se **re-codifican al subirlas** (sin EXIF/GPS, ~1600 px). Detalle en `docs/infraestructura.md`.
+Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `stack-advisor` antes de fijar): archivos (fotos, firmas) en **Cloudflare R2**, cambiado a **Backblaze B2** el 2026-10-21 (preguntas 44 a 47); base de datos de producción en **Neon** con **copia diaria (`pg_dump`)** al almacenamiento de archivos (bucket aparte); las fotos se **re-codifican al subirlas** (sin EXIF/GPS, ~1600 px). Detalle en `docs/infraestructura.md`.
 
 Riesgos aceptados por el usuario (2026-10-17): Almacenista y Consulta conservan `usuarios.ver` con los datos completos de las cuentas (hallazgo M-4, Ley 1581); se puede retirar desde la matriz. La bitácora de seguridad (A-1) se hará como feature aparte **antes de cargar datos reales**, junto con el bloqueo por intentos fallidos.
 
@@ -161,9 +161,18 @@ Formuladas en la conversación con opciones; ⭐ = recomendada. Lo marcado "prov
 | 35 | Activo serializado debe estar en la ubicación de origen | ⭐ sí, el asistente solo ofrece los del origen | pendiente |
 | 36 | `reportes.ver` sin permiso del módulo de origen | ⭐ no: cada reporte exige también el ver de su módulo | pendiente |
 | 37 | Plan de Render para el backend | ⭐ Starter (~US$7/mes): necesario para el paso previo de migraciones y la consola (desbloqueo del admin); Free se apaga a los 15 min | pendiente |
-| 38 | Tareas programadas en Render | ⭐ 2 Cron Jobs (≥ US$1/mes c/u): limpieza diaria + respaldo diario a R2 | pendiente |
+| 38 | Tareas programadas en Render | ⭐ 2 Cron Jobs (≥ US$1/mes c/u): limpieza diaria + respaldo diario a B2 (antes R2, pregunta 44) | pendiente |
 | 39 | Peticiones al backend que no pasan por Vercel | ⭐ aceptarlas (para el futuro cliente móvil) usando la IP que ve Render; B: rechazarlas con 403 | pendiente (por defecto: aceptar) |
 | 40 | Cifrar los respaldos | ⭐ sí, con clave guardada fuera de Render (Ley 1581) | **No** (2026-10-21): respaldos sin cifrar en el bucket privado; riesgo B3 aceptado |
 | 41 | Permisos de BD por columna como migración automática | ⭐ sí, condicionada a producción (`DB_APP_ROLE`) | pendiente |
 | 42 | Cómo se ejecutan las migraciones en producción (credencial dueña de la BD) | ⭐ desde GitHub Actions con aprobación manual y luego Deploy Hook de Render (la credencial dueña nunca vive en Render); B: variable temporal en Render solo durante deploys con migraciones | **B** (2026-10-21): Pre-Deploy de Render con `DB_MIGRATION_URL` solo en el Web Service; riesgo B1 aceptado |
-| 43 | Retención de las firmas de entrega (bucket lock de `signatures/` en R2) | ⭐ 5 años | **5 años** (2026-10-21) |
+| 43 | Retención de las firmas de entrega (bucket lock de `signatures/` en R2; con B2, Object Lock del bucket de firmas, pregunta 46) | ⭐ 5 años | **5 años** (2026-10-21) |
+| 44 | Proveedor de almacenamiento de archivos y respaldos | Cloudflare R2 (decidido el 2026-10-17); B: Backblaze B2 (no pide tarjeta) | **Backblaze B2** (2026-10-21), en vez de R2 |
+| 45 | Buckets en B2 | ⭐ tres buckets privados separados | **Tres buckets privados** (2026-10-21): `activosb31-fotos` (`assets/`), `activosb31-firmas` (`signatures/`, Object Lock por defecto) y `activosb31-respaldos` (`daily/` y `monthly/`) |
+| 46 | Modo del Object Lock de las firmas | ⭐ governance en pruebas, compliance antes de la primera firma real | **Governance** durante las pruebas; **compliance de 1825 días** (5 años, pregunta 43) antes de la primera firma real (2026-10-21) |
+| 47 | Retención de los respaldos | ⭐ un solo bucket con retención por defecto de 30 días | **Un solo bucket con 30 días** para `daily/` y `monthly/` (2026-10-21); los mensuales quedan con menos protección después de 30 días (riesgo aceptado) |
+| 48 | Cómo se prueba la firma de punta a punta | ⭐ en producción solo archivos sueltos (`humo.txt`); la primera entrega en producción es real | **A** (2026-10-21) |
+| 49 | Periodo del Object Lock governance de las firmas durante las pruebas | ⭐ 1 día | **1 día** (2026-10-21) |
+| 50 | Desde cuándo cuentan los 5 años de retención de una firma | ⭐ desde la subida de la firma (automático) | **Desde la subida** (2026-10-21) |
+| 51 | Tope de almacenamiento en *Caps & Alerts* de B2 | ⭐ 10 GB (nivel gratuito; al llegar, B2 bloquea en vez de cobrar) | **10 GB** (2026-10-21) |
+| 52 | Modo del Object Lock del bucket de respaldos | ⭐ compliance 30 días | **Compliance, 30 días** (2026-10-21) |
