@@ -6,6 +6,7 @@ import { BellIcon, BoxesIcon, CheckCircle2Icon, HandshakeIcon, PackageIcon } fro
 import { ASSET_STATUSES, ASSET_STATUS_LABELS } from 'app/features/activos/schemas'
 import { dashboardApi, type Dashboard } from 'app/features/reportes/api'
 import { useRequireAuth } from 'app/provider/auth'
+import { BrandLogo } from '@/components/brand-logo'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DueBadge } from '@/features/activos/AssetStatusBadge'
@@ -45,10 +46,13 @@ function InicioDashboard({ userName }: { userName: string | null }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{userName ? `Hola, ${userName}` : 'Inicio'}</h1>
-        <p className="text-sm text-muted-foreground">Resumen del inventario y alertas de la estación.</p>
-      </div>
+      <header className="flex items-center gap-3">
+        <BrandLogo decorative className="size-12" />
+        <div>
+          <h1 className="text-xl font-semibold">{userName ? `Hola, ${userName}` : 'Inicio'}</h1>
+          <p className="text-sm text-muted-foreground">Resumen del inventario y alertas de la estación.</p>
+        </div>
+      </header>
       {failed ? (
         <p role="alert" className="text-sm text-destructive">
           No fue posible cargar el tablero.

@@ -1,6 +1,7 @@
 'use client'
 
 import { AppSidebar } from '@/components/app-sidebar'
+import { BrandLogo } from '@/components/brand-logo'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
@@ -31,6 +32,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-2 h-4 data-vertical:self-auto" />
+            <BrandLogo decorative className="size-7" />
             <span className="truncate text-base font-medium">Estación de Bomberos B31 · Madrid, Cundinamarca</span>
             <ThemeToggle className="ml-auto" />
           </div>

@@ -28,6 +28,17 @@ describe('InicioScreen (/, 008 US4, D-004)', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('el encabezado muestra el logo (decorativo) junto al saludo', async () => {
+    render(<InicioScreen />)
+    const heading = await screen.findByRole('heading', { name: 'Hola, Ana Admin', level: 1 })
+    const header = heading.closest('header')!
+    const logo = header.querySelector('img[data-slot="brand-logo"]')
+    expect(logo).toHaveAttribute('src', '/logo-b31.png')
+    expect(logo).toHaveAttribute('alt', '')
+    expect(logo).toHaveAttribute('aria-hidden', 'true')
+    expect(within(header).queryByRole('img')).not.toBeInTheDocument()
+  })
+
   it('muestra los conteos de activos por estado y las alertas enlazadas a la ficha', async () => {
     render(<InicioScreen />)
 

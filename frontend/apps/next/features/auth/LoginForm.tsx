@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FlameIcon } from 'lucide-react'
 import { login } from 'app/features/auth/api'
 import { loginSchema } from 'app/features/auth/schemas'
 import { ApiValidationError, RateLimitError } from 'app/lib/api-client'
 import { CHANGE_PASSWORD_PATH } from 'app/features/auth/paths'
 import { useAuth } from 'app/provider/auth'
+import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -56,7 +56,7 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <FlameIcon className="mx-auto size-8 text-primary" aria-hidden />
+        <BrandLogo className="mx-auto size-20" />
         <CardTitle className="text-xl">ActivosB31</CardTitle>
         <CardDescription>Inventario de la Estación de Bomberos de Madrid</CardDescription>
       </CardHeader>

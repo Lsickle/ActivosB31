@@ -73,4 +73,19 @@ describe('AppSidebar', () => {
     await userEvent.click(screen.getByText('Ana Consulta'))
     expect(await screen.findByRole('menuitem', { name: 'Cambiar contraseña' })).toBeInTheDocument()
   })
+
+  it('el encabezado muestra el logo (decorativo) en el enlace "ActivosB31" a Inicio', () => {
+    useAuth.mockReturnValue({
+      user: { name: 'Ana', username: 'ana', email: null, permissions: [] },
+      logout: vi.fn(),
+    })
+    renderSidebar()
+
+    const link = screen.getByRole('link', { name: 'ActivosB31' })
+    expect(link).toHaveAttribute('href', '/')
+    const logo = link.querySelector('img[data-slot="brand-logo"]')
+    expect(logo).toHaveAttribute('src', '/logo-b31.png')
+    expect(logo).toHaveAttribute('alt', '')
+    expect(logo).toHaveAttribute('aria-hidden', 'true')
+  })
 })

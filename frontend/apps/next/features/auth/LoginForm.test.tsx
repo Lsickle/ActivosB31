@@ -17,6 +17,11 @@ describe('LoginForm', () => {
     vi.clearAllMocks()
   })
 
+  it('muestra el logo de la estación sobre el título', () => {
+    render(<LoginForm />)
+    expect(screen.getByRole('img', { name: 'Estación de Bomberos de Madrid' })).toHaveAttribute('src', '/logo-b31.png')
+  })
+
   it('valida campos vacíos sin llamar al backend', async () => {
     render(<LoginForm />)
 

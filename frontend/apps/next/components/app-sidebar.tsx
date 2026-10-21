@@ -3,8 +3,8 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { FlameIcon } from 'lucide-react'
 
+import { BrandLogo } from '@/components/brand-logo'
 import { NavUser } from '@/components/nav-user'
 import {
   Sidebar,
@@ -35,7 +35,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton className="data-[slot=sidebar-menu-button]:p-1.5!" render={<Link href="/" />}>
-              <FlameIcon className="text-primary" />
+              <BrandLogo decorative className="size-6" />
               <span className="text-base font-semibold">ActivosB31</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
