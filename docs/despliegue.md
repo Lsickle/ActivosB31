@@ -52,7 +52,7 @@ Reglas del bucket de **respaldos**:
 - *Bucket lock* (retención): `daily/` **30 días** y `monthly/` **365 días**. Así un token filtrado no puede borrar ni sobrescribir los respaldos recientes. (El script usa nombres con fecha y hora, por lo que nunca intenta sobrescribir.)
 
 Regla del bucket de **archivos**:
-- *Bucket lock* sobre el prefijo `signatures/` (pendiente 3b de `CLAUDE.md`): las firmas de entrega (RN-024) no se pueden sobrescribir ni borrar. El periodo lo define el usuario según la política de retención (Ley 1581); como mínimo, el mismo que la retención de las entregas.
+- *Bucket lock* sobre el prefijo `signatures/` (pendiente 3b de `CLAUDE.md`): las firmas de entrega (RN-024) no se pueden sobrescribir ni borrar. Periodo: **5 años** (pregunta 43, 2026-10-21; política de retención, Ley 1581).
 
 Endpoint S3 de la cuenta: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` (es el mismo para los dos buckets).
 
@@ -79,7 +79,7 @@ El contenedor arranca con `php artisan optimize && exec frankenphp run --config 
 
 Recomendado: un **Environment Group** `activosb31-app` compartido por el Web Service y el Cron Job de mantenimiento (sección 5.1), para que ambos tengan la misma configuración. **`DB_MIGRATION_URL` nunca va en el Environment Group ni en ningún Cron Job** (ver B1 abajo).
 
-> **B1 (pendiente, pregunta 42 del usuario)**: Render pasa las mismas variables al Pre-Deploy y al contenedor en ejecución, así que con el Pre-Deploy de abajo la credencial del rol **dueño** (`DB_MIGRATION_URL`: DDL, puede quitar triggers y REVOKE de las tablas de solo inserción) queda en el entorno del Web Service mientras atiende peticiones. Una RCE o una fuga de variables (p. ej. un `APP_DEBUG=true` accidental) la expondría. Opción **recomendada**: sacar las migraciones de Render y correrlas desde GitHub Actions en un *environment* protegido (`production`, con revisores obligatorios y `DB_MIGRATION_URL` como secreto del environment), y al terminar disparar el **Deploy Hook** de Render (secreto `RENDER_DEPLOY_HOOK_URL`, con Auto-Deploy desactivado). Así el Web Service solo tiene `DB_URL` (`activosb31_app`). Mientras el usuario no decida, se usa el Pre-Deploy de esta sección, aceptando ese riesgo. El workflow **no** está creado.
+> **B1 (riesgo aceptado por el usuario el 2026-10-21, pregunta 42 = B: migraciones en el Pre-Deploy de Render)**: Render pasa las mismas variables al Pre-Deploy y al contenedor en ejecución, así que con el Pre-Deploy de abajo la credencial del rol **dueño** (`DB_MIGRATION_URL`: DDL, puede quitar triggers y REVOKE de las tablas de solo inserción) queda en el entorno del Web Service mientras atiende peticiones. Una RCE o una fuga de variables (p. ej. un `APP_DEBUG=true` accidental) la expondría. Opción **recomendada**: sacar las migraciones de Render y correrlas desde GitHub Actions en un *environment* protegido (`production`, con revisores obligatorios y `DB_MIGRATION_URL` como secreto del environment), y al terminar disparar el **Deploy Hook** de Render (secreto `RENDER_DEPLOY_HOOK_URL`, con Auto-Deploy desactivado). Así el Web Service solo tiene `DB_URL` (`activosb31_app`). Mientras el usuario no decida, se usa el Pre-Deploy de esta sección, aceptando ese riesgo. El workflow **no** está creado.
 
 | Variable | Valor / descripción |
 |---|---|
@@ -202,7 +202,7 @@ Variables (no van en el Environment Group de la app). La conexión va en las var
 | `BACKUP_BUCKET` | Bucket de respaldos |
 | `BACKUP_R2_ACCESS_KEY_ID` / `BACKUP_R2_SECRET_ACCESS_KEY` | Token *Object Read & Write* del bucket de respaldos |
 | `BACKUP_R2_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
-| `BACKUP_AGE_RECIPIENT` | Opcional (B3, **pregunta 40 del usuario, pendiente; recomendado sí**). Una o varias claves **públicas** de age (`age1...`) separadas por espacios. Sin ella el respaldo se sube sin cifrar y el log lo advierte. |
+| `BACKUP_AGE_RECIPIENT` | Opcional (B3, **pregunta 40: el usuario eligió no cifrar (2026-10-21)**; dejarla sin definir). Una o varias claves **públicas** de age (`age1...`) separadas por espacios. Sin ella el respaldo se sube sin cifrar y el log lo advierte. |
 
 El script (`set -eu`, `umask 077`, sin imprimir secretos):
 
@@ -286,9 +286,9 @@ Aplicado en el repo:
 
 Pendiente (no se puede hacer sin las cuentas o requiere decisión del usuario):
 
-- **B1**: credencial dueña (`DB_MIGRATION_URL`) en el entorno del Web Service en ejecución. Recomendado: migraciones desde GitHub Actions con *environment* protegido + Deploy Hook de Render (**pregunta 42 del usuario**). Mientras tanto, nunca en el Environment Group ni en Cron Jobs (sección 3).
+- **B1**: credencial dueña (`DB_MIGRATION_URL`) en el entorno del Web Service en ejecución. Recomendado: migraciones desde GitHub Actions con *environment* protegido + Deploy Hook de Render (**pregunta 42**: el usuario eligió B el 2026-10-21, Pre-Deploy de Render, riesgo aceptado). Siempre, nunca en el Environment Group ni en Cron Jobs (sección 3).
 - **B2**: `VERCEL_PROXY_REQUIRED=true` tras la prueba b.
-- **B3**: activar `BACKUP_AGE_RECIPIENT` (**pregunta 40 del usuario**, recomendado sí) y definir quién custodia la clave privada.
+- **B3 (riesgo aceptado, pregunta 40 = no cifrar, 2026-10-21)**: los respaldos quedan sin cifrar en el bucket privado de respaldos; su protección es el token exclusivo, el bucket lock y la 2FA de Cloudflare.
 - **B4**: 2FA en Cloudflare (y en GitHub, Render, Vercel y Neon) y bucket lock de `signatures/` antes de la primera firma real (sección 2).
 - **B6**: probar `sslmode=verify-full&sslrootcert=system` en `DB_URL`, `DB_MIGRATION_URL` y el respaldo (secciones 3 y 5.2).
 - **B7**: cuando exista recuperación de contraseña por correo, configurar `trustHosts` (`$middleware->trustHosts(...)` en `bootstrap/app.php`) con el host del backend, para que los enlaces del correo no se puedan generar con un `Host` inyectado.

@@ -163,6 +163,7 @@ Formuladas en la conversación con opciones; ⭐ = recomendada. Lo marcado "prov
 | 37 | Plan de Render para el backend | ⭐ Starter (~US$7/mes): necesario para el paso previo de migraciones y la consola (desbloqueo del admin); Free se apaga a los 15 min | pendiente |
 | 38 | Tareas programadas en Render | ⭐ 2 Cron Jobs (≥ US$1/mes c/u): limpieza diaria + respaldo diario a R2 | pendiente |
 | 39 | Peticiones al backend que no pasan por Vercel | ⭐ aceptarlas (para el futuro cliente móvil) usando la IP que ve Render; B: rechazarlas con 403 | pendiente (por defecto: aceptar) |
-| 40 | Cifrar los respaldos | ⭐ sí, con clave guardada fuera de Render (Ley 1581) | pendiente |
+| 40 | Cifrar los respaldos | ⭐ sí, con clave guardada fuera de Render (Ley 1581) | **No** (2026-10-21): respaldos sin cifrar en el bucket privado; riesgo B3 aceptado |
 | 41 | Permisos de BD por columna como migración automática | ⭐ sí, condicionada a producción (`DB_APP_ROLE`) | pendiente |
-| 42 | Cómo se ejecutan las migraciones en producción (credencial dueña de la BD) | ⭐ desde GitHub Actions con aprobación manual y luego Deploy Hook de Render (la credencial dueña nunca vive en Render); B: variable temporal en Render solo durante deploys con migraciones | pendiente |
+| 42 | Cómo se ejecutan las migraciones en producción (credencial dueña de la BD) | ⭐ desde GitHub Actions con aprobación manual y luego Deploy Hook de Render (la credencial dueña nunca vive en Render); B: variable temporal en Render solo durante deploys con migraciones | **B** (2026-10-21): Pre-Deploy de Render con `DB_MIGRATION_URL` solo en el Web Service; riesgo B1 aceptado |
+| 43 | Retención de las firmas de entrega (bucket lock de `signatures/` en R2) | ⭐ 5 años | **5 años** (2026-10-21) |
