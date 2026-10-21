@@ -9,6 +9,7 @@ use App\Models\AssetCategory;
 use App\Models\AssetType;
 use App\Models\Employee;
 use App\Models\SecurityEvent;
+use App\Pdf\PdfRenderer;
 use App\Reports\Export\ReportResponder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -181,7 +182,7 @@ describe('R-2: tope de filas de los archivos', function () {
     it('si el reporte supera el tope, 422 en `from` sin generar el archivo ni registrar la exportación; el JSON no tiene tope', function () {
         actingWithPermissions([Permission::ReportesVer->value]);
         serializedInventoryRows(3);
-        app()->bind(ReportResponder::class, fn ($app) => new ReportResponder($app->make(RecordSecurityEvent::class), pdfMaxRows: 2, xlsxMaxRows: 3));
+        app()->bind(ReportResponder::class, fn ($app) => new ReportResponder($app->make(RecordSecurityEvent::class), $app->make(PdfRenderer::class), pdfMaxRows: 2, xlsxMaxRows: 3));
 
         getReport('/api/reports/inventory?format=pdf')
             ->assertUnprocessable()

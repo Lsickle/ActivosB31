@@ -372,12 +372,13 @@ describe('PDF (D-005)', function () {
             ->toContain('Tipos bajo mínimo')
             ->toContain('DejaVu Sans')
             ->toContain('landscape')
-            ->not->toContain('<img')
             ->not->toContain('<script');
+        expectOnlyBrandImages($pdfHtml);
     });
 
     it('las fichas van en vertical y escapan el HTML de los datos', function () {
         actingWithPermissions([Permission::ReportesVer->value]);
+        useBrandLogo();
         $asset = Asset::factory()->create(['brand' => '<b>MSA</b><img src="http://x">']);
         $html = capturePdfHtml();
 
@@ -385,8 +386,37 @@ describe('PDF (D-005)', function () {
         $pdfHtml = $html();
 
         expect($pdfHtml)->toContain('portrait')
-            ->toContain('&lt;b&gt;MSA&lt;/b&gt;')
-            ->not->toContain('<img');
+            ->toContain('&lt;b&gt;MSA&lt;/b&gt;&lt;img src=&quot;http://x&quot;&gt;')
+            ->not->toContain('src="http://x"');
+        // Solo el logo y la marca de agua (RN-041).
+        expect(expectOnlyBrandImages($pdfHtml))->toBe(2);
+    });
+
+    it('RN-041: lleva el logo arriba a la derecha y la marca de agua, incrustados como data:image/png', function () {
+        actingWithPermissions([Permission::ReportesVer->value]);
+        $png = useBrandLogo();
+        $html = capturePdfHtml();
+
+        $pdf = getReport('/api/reports/inventory?format=pdf')->assertOk()->getContent();
+        $pdfHtml = $html();
+
+        $dataUri = 'data:image/png;base64,'.base64_encode($png);
+        expect(expectOnlyBrandImages($pdfHtml))->toBe(2)
+            ->and($pdfHtml)->toContain('class="brand-logo" src="'.$dataUri.'"')
+            ->and($pdfHtml)->toContain('class="brand-watermark" src="'.$dataUri.'"')
+            ->and(pdfImageCount($pdf))->toBeGreaterThanOrEqual(1);
+    });
+
+    it('RN-041: sin el archivo del logo el PDF se genera igual, sin imágenes', function () {
+        actingWithPermissions([Permission::ReportesVer->value]);
+        withoutBrandLogo();
+        $html = capturePdfHtml();
+
+        $pdf = getReport('/api/reports/inventory?format=pdf')->assertOk()->getContent();
+
+        expect($pdf)->toStartWith('%PDF-')
+            ->and(pdfImgTags($html()))->toBe([])
+            ->and(pdfImageCount($pdf))->toBe(0);
     });
 });
 

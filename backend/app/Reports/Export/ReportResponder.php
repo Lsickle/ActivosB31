@@ -5,8 +5,8 @@ namespace App\Reports\Export;
 use App\Actions\RecordSecurityEvent;
 use App\Enums\SecurityEventType;
 use App\Http\Requests\Reportes\ReportRequest;
+use App\Pdf\PdfRenderer;
 use App\Reports\Report;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
@@ -56,6 +56,7 @@ class ReportResponder
 
     public function __construct(
         private readonly RecordSecurityEvent $recordEvent,
+        private readonly PdfRenderer $pdfRenderer,
         private readonly int $pdfMaxRows = self::PDF_MAX_ROWS,
         private readonly int $xlsxMaxRows = self::XLSX_MAX_ROWS,
     ) {}
@@ -74,12 +75,12 @@ class ReportResponder
         $this->ensureWithinLimit($report, $format);
 
         $response = match ($format) {
-            self::FORMAT_XLSX => $this->download(
+            self::FORMAT_XLSX => self::attachment(
                 ExcelFacade::raw(new ReportSpreadsheet($report), Excel::XLSX),
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 $report->fileName(self::FORMAT_XLSX),
             ),
-            self::FORMAT_PDF => $this->download(
+            self::FORMAT_PDF => self::attachment(
                 $this->pdf($report),
                 'application/pdf',
                 $report->fileName(self::FORMAT_PDF),
@@ -111,19 +112,25 @@ class ReportResponder
 
     /**
      * D-005: plantilla Blade con tablas y CSS inline, carta vertical u
-     * horizontal según el reporte; sin imágenes (config/dompdf.php).
+     * horizontal según el reporte. RN-041: con el logo de la estación (las
+     * únicas imágenes, data:// vía PdfRenderer).
      */
     private function pdf(Report $report): string
     {
-        return Pdf::loadView('reports.pdf', [
+        return $this->pdfRenderer->render('reports.pdf', [
             'title' => $report->title(),
             'header' => $report->meta()->headerFields(),
             'sections' => $report->sections(),
             'orientation' => $report->orientation(),
-        ])->setPaper('letter', $report->orientation())->output();
+        ], $report->orientation());
     }
 
-    private function download(string $content, string $contentType, string $fileName): Response
+    /**
+     * Descarga de un archivo generado (también el acta de entrega, RN-041):
+     * attachment, sin cachés (datos personales, RN-022) y sin reinterpretar el
+     * tipo de contenido.
+     */
+    public static function attachment(string $content, string $contentType, string $fileName): Response
     {
         return response($content, 200, [
             'Content-Type' => $contentType,

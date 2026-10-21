@@ -39,6 +39,8 @@ return [
         // recurso (ni imágenes, ni hojas de estilo, ni @font-face): ningún
         // protocolo permitido, ni siquiera data://. Las fuentes de dompdf se
         // leen de font_dir sin pasar por esta lista.
+        // RN-041: App\Pdf\PdfRenderer (el único que genera PDF) habilita en
+        // tiempo de ejecución solo data:// para el logo y la firma.
         'allowed_protocols' => [],
 
         'log_output_file' => null,

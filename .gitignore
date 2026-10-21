@@ -9,3 +9,7 @@ docs/prototipo-v0/**/node_modules/
 docs/prototipo-v0/**/.next/
 
 nul
+
+# Original del logo (JPEG con fondo); en el repo solo va el PNG procesado
+backend/resources/branding/*.jpeg
+backend/resources/branding/*.jpg

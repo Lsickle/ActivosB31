@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Enums\Permission;
 use App\Models\User;
+use App\Pdf\Branding;
 use App\Reports\Export\ReportResponder;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -21,7 +22,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // RN-041: el logo de los PDF se lee una vez por petición (un solo
+        // warning si falta).
+        $this->app->scoped(Branding::class);
     }
 
     /**
@@ -105,8 +108,9 @@ class AppServiceProvider extends ServiceProvider
         // segundos (SC-001); se limita por usuario. El JSON no cuenta.
         // R-1: el formato se lee solo de la query, igual que en ReportRequest
         // (validationData()); un `format` en el cuerpo se ignora en ambos.
+        // RN-041: el acta PDF de una entrega comparte el mismo límite.
         RateLimiter::for('report-downloads', function (Request $request) {
-            if (! in_array($request->query('format'), [ReportResponder::FORMAT_XLSX, ReportResponder::FORMAT_PDF], true)) {
+            if (! $request->routeIs('deliveries.pdf') && ! in_array($request->query('format'), [ReportResponder::FORMAT_XLSX, ReportResponder::FORMAT_PDF], true)) {
                 return Limit::none();
             }
 

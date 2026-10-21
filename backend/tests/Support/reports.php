@@ -7,10 +7,12 @@
  */
 
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\View;
 use Illuminate\Testing\TestResponse;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+
+// capturePdfHtml() y las ayudas del logo viven en pdf.php (RN-041).
+require_once __DIR__.'/pdf.php';
 
 /**
  * Carga un .xlsx (binario) con PhpSpreadsheet.
@@ -131,26 +133,6 @@ function xlsxAllValues(string $binary): array
 function bogotaDateTime(?string $iso): ?string
 {
     return $iso === null ? null : Carbon::parse($iso)->setTimezone('America/Bogota')->format('Y-m-d H:i');
-}
-
-/**
- * Captura el HTML con el que se genera el PDF (la plantilla reports.pdf):
- * el binario del PDF no permite buscar texto (fuente embebida en subconjunto).
- *
- * @return Closure(): string
- */
-function capturePdfHtml(): Closure
-{
-    $data = null;
-    View::composer('reports.pdf', function ($view) use (&$data) {
-        $data = $view->getData();
-    });
-
-    return function () use (&$data): string {
-        expect($data)->not->toBeNull('No se renderizó la plantilla reports.pdf.');
-
-        return view('reports.pdf', $data)->render();
-    };
 }
 
 /**

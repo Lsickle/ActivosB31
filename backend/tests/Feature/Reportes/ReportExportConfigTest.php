@@ -1,5 +1,6 @@
 <?php
 
+use App\Pdf\PdfRenderer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -28,6 +29,16 @@ describe('configuración de dompdf', function () {
 
         $options = Pdf::loadHTML('<p>x</p>')->getDomPDF()->getOptions();
         expect($options->getAllowedProtocols())->toBe([]);
+    });
+
+    it('RN-041: el único punto que abre un protocolo es PdfRenderer, y solo data:// (sin recursos remotos)', function () {
+        $options = app(PdfRenderer::class)->make('reports.pdf', [
+            'title' => 'x', 'header' => [], 'sections' => [], 'orientation' => 'portrait',
+        ])->getDomPDF()->getOptions();
+
+        expect(array_keys($options->getAllowedProtocols()))->toBe(['data://'])
+            ->and($options->getIsRemoteEnabled())->toBeFalse()
+            ->and(config('dompdf.options.allowed_protocols'))->toBe([]);
     });
 
     it('usa DejaVu Sans por defecto (tildes y eñes)', function () {
