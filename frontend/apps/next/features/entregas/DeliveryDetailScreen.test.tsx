@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, ApiValidationError } from 'app/lib/api-client'
+import { ApiError, ApiValidationError, RateLimitError } from 'app/lib/api-client'
 import { chooseOption, options } from '@/features/activos/test-fixtures'
 import { DeliveryDetailScreen } from './DeliveryDetailScreen'
 import { delivery, deliveryItem, glovesItem } from './test-fixtures'
@@ -12,6 +12,9 @@ const getOptions = vi.fn()
 const can = vi.fn()
 const useRequireAuth = vi.fn()
 const toastSuccess = vi.fn()
+const toastError = vi.fn()
+const downloadPdf = vi.fn()
+const saveFile = vi.fn()
 
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: '1' }) }))
 vi.mock('app/features/entregas/api', async (importOriginal) => ({
@@ -22,6 +25,7 @@ vi.mock('app/features/entregas/api', async (importOriginal) => ({
     list: vi.fn(),
     create: vi.fn(),
     alerts: vi.fn(),
+    downloadPdf: (...args: unknown[]) => downloadPdf(...args),
   },
 }))
 vi.mock('app/features/configuracion/api', async (importOriginal) => ({
@@ -32,7 +36,10 @@ vi.mock('app/provider/auth', () => ({
   useCan: (code: string) => can(code),
   useRequireAuth: (...args: unknown[]) => useRequireAuth(...args),
 }))
-vi.mock('sonner', () => ({ toast: { success: (...args: unknown[]) => toastSuccess(...args), error: vi.fn() } }))
+vi.mock('sonner', () => ({
+  toast: { success: (...args: unknown[]) => toastSuccess(...args), error: (...args: unknown[]) => toastError(...args) },
+}))
+vi.mock('@/features/reportes/download', () => ({ saveFile: (...args: unknown[]) => saveFile(...args) }))
 
 const withReturns = delivery({
   kind: 'prestamo',
@@ -117,6 +124,76 @@ describe('DeliveryDetailScreen (/entregas/[id], 007 US2, US3)', () => {
     expect(within(section).getByText('Firma registrada')).toBeInTheDocument()
     expect(within(section).queryByRole('img')).not.toBeInTheDocument()
     expect(screen.queryByText('No fue posible mostrar la firma.')).not.toBeInTheDocument()
+  })
+
+  describe('acta en PDF', () => {
+    const pdf = { blob: new Blob(['%PDF'], { type: 'application/pdf' }), filename: 'ENT-000001.pdf' }
+
+    it('con firma visible ofrece descargar el acta y la guarda con el nombre del servidor', async () => {
+      downloadPdf.mockResolvedValue(pdf)
+      render(<DeliveryDetailScreen />)
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Descargar acta (PDF)' }))
+
+      expect(downloadPdf).toHaveBeenCalledWith(1)
+      await waitFor(() => expect(saveFile).toHaveBeenCalledWith(pdf, 'ENT-000001.pdf'))
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('sin signature_url (sin permiso para ver la firma) no ofrece el acta', async () => {
+      const { signature_url: _omitted, ...withoutSignature } = withReturns
+      get.mockResolvedValue({ data: withoutSignature })
+      render(<DeliveryDetailScreen />)
+
+      await screen.findByRole('heading', { name: 'ENT-000001', level: 1 })
+      expect(screen.queryByRole('button', { name: /Descargar acta/ })).not.toBeInTheDocument()
+    })
+
+    it('mientras descarga se deshabilita y muestra "Descargando…"', async () => {
+      let resolve: (value: typeof pdf) => void = () => {}
+      downloadPdf.mockReturnValue(new Promise((done) => (resolve = done)))
+      render(<DeliveryDetailScreen />)
+
+      const button = await screen.findByRole('button', { name: 'Descargar acta (PDF)' })
+      await userEvent.click(button)
+
+      expect(button).toBeDisabled()
+      expect(button).toHaveAttribute('aria-busy', 'true')
+      expect(button).toHaveTextContent('Descargando…')
+      resolve(pdf)
+      await waitFor(() => expect(button).toBeEnabled())
+    })
+
+    it('409: avisa que la firma no pasó la verificación de integridad', async () => {
+      downloadPdf.mockRejectedValue(new ApiError('Conflict', 409))
+      render(<DeliveryDetailScreen />)
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Descargar acta (PDF)' }))
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith('La firma de esta entrega no pasó la verificación de integridad.')
+      )
+      expect(saveFile).not.toHaveBeenCalled()
+    })
+
+    it('429: muestra el mensaje de espera del límite de descargas', async () => {
+      const error = new RateLimitError(30)
+      downloadPdf.mockRejectedValue(error)
+      render(<DeliveryDetailScreen />)
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Descargar acta (PDF)' }))
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(error.message))
+    })
+
+    it('error inesperado: mensaje genérico', async () => {
+      downloadPdf.mockRejectedValue(new ApiError('Server Error', 500))
+      render(<DeliveryDetailScreen />)
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Descargar acta (PDF)' }))
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('No fue posible descargar el acta.'))
+    })
   })
 
   it('sin entregas.ver muestra "Acceso denegado"', () => {

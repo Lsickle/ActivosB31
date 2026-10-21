@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Entregas\ProcessDeliverySignature;
 use App\Enums\DeliveryKind;
 use App\Enums\DeliveryStatus;
 use App\Models\Concerns\InsertOnly;
@@ -229,17 +230,61 @@ class Delivery extends Model
     }
 
     /**
-     * M-3: el archivo de la firma existe y su SHA-256 coincide con el
-     * registrado al crear la entrega (falso si se cambió o se perdió).
+     * M-3: la firma está íntegra (ver verifiedSignature()).
      */
     public function signatureIntact(): bool
+    {
+        return $this->verifiedSignature()['problem'] === null;
+    }
+
+    /**
+     * M-3: null si la firma está íntegra; si no, la razón que se registra en
+     * la bitácora (signature_integrity_failed). La usan el comando
+     * deliveries:verify-signatures y el acta PDF (RN-041).
+     *
+     * @return 'altered'|'missing'|null
+     */
+    public function signatureProblem(): ?string
+    {
+        return $this->verifiedSignature()['problem'];
+    }
+
+    /**
+     * M-3 y M-1 (revisión de seguridad de RN-041): lee el archivo de la firma
+     * una sola vez y devuelve esos mismos bytes solo si su SHA-256 coincide
+     * con el registrado al crear la entrega y es un PNG de máximo
+     * ProcessDeliverySignature::MAX_SIDE px por lado (dompdf detecta el tipo
+     * por el contenido: un SVG o GIF con la huella correcta no se incrusta).
+     *
+     * - missing: el archivo no existe o no se puede leer.
+     * - altered: otra huella, o no es un PNG válido dentro de los límites.
+     *
+     * @return array{png: string|null, problem: 'altered'|'missing'|null}
+     */
+    public function verifiedSignature(): array
     {
         try {
             $contents = self::signatureDisk()->get($this->signature_path);
         } catch (UnableToReadFile) {
-            return false;
+            $contents = null;
         }
 
-        return $contents !== null && hash_equals((string) $this->signature_sha256, hash('sha256', $contents));
+        if ($contents === null) {
+            return ['png' => null, 'problem' => 'missing'];
+        }
+
+        if (! hash_equals((string) $this->signature_sha256, hash('sha256', $contents))) {
+            return ['png' => null, 'problem' => 'altered'];
+        }
+
+        $info = @getimagesizefromstring($contents);
+        $maxSide = ProcessDeliverySignature::MAX_SIDE;
+
+        if ($info === false || $info[2] !== IMAGETYPE_PNG
+            || $info[0] < 1 || $info[1] < 1 || $info[0] > $maxSide || $info[1] > $maxSide) {
+            return ['png' => null, 'problem' => 'altered'];
+        }
+
+        return ['png' => $contents, 'problem' => null];
     }
 }

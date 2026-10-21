@@ -128,7 +128,11 @@ security_events(id, event varchar(50) idx,      -- App\Enums\SecurityEventType: 
                                                 -- signature_integrity_failed (M-3 de 007/008: comando
                                                 --   deliveries:verify-signatures, sin actor ni IP; metadata
                                                 --   {delivery_id, code, reason: altered|missing}; no se repite
-                                                --   para la misma entrega y razón dentro de 24 h)
+                                                --   para la misma entrega y razón dentro de 24 h; también lo
+                                                --   registra GET /api/deliveries/{id}/pdf (RN-041) con actor e IP
+                                                --   de quien intentó descargar el acta, misma metadata, sin deduplicar),
+                                                -- delivery_pdf_exported (RN-041: descarga del acta PDF de una
+                                                --   entrega; metadata {delivery_id, code})
                 actor_id FK -> users NULL idx,  -- quién lo hizo; NULL en login_failed y account_locked (no autenticado)
                 target_user_id FK -> users NULL idx, target_role_id FK -> roles NULL,
                 login_attempted varchar(255) NULL,  -- texto ingresado, solo en login_failed (D-005); nunca la contraseña

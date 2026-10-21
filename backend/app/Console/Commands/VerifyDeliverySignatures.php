@@ -63,7 +63,7 @@ class VerifyDeliverySignatures extends Command
                 foreach ($deliveries as $delivery) {
                     $verified++;
 
-                    $reason = $this->problemWith($delivery);
+                    $reason = $delivery->signatureProblem();
 
                     if ($reason === null) {
                         continue;
@@ -102,15 +102,6 @@ class VerifyDeliverySignatures extends Command
         $date = CarbonImmutable::createFromFormat('!Y-m-d', $value, Delivery::LOCAL_TIMEZONE);
 
         return $date !== null && $date->format('Y-m-d') === $value ? $date : null;
-    }
-
-    private function problemWith(Delivery $delivery): ?string
-    {
-        if ($delivery->signatureIntact()) {
-            return null;
-        }
-
-        return Delivery::signatureDisk()->exists($delivery->signature_path) ? 'altered' : 'missing';
     }
 
     /**

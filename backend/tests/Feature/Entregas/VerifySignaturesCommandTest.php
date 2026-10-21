@@ -8,6 +8,8 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 
+require_once __DIR__.'/../../Support/deliveries.php';
+
 /**
  * M-3 (revisión de seguridad de 007/008): auditoría periódica de las firmas
  * de entrega (RN-024 / D-002) con Delivery::signatureIntact().
@@ -21,7 +23,8 @@ beforeEach(function () {
  */
 function deliveryWithSignature(array $attributes = []): Delivery
 {
-    $contents = 'png-'.fake()->uuid();
+    // M-1 (revisión de RN-041): la firma íntegra debe ser un PNG real.
+    $contents = signaturePng();
     $delivery = Delivery::factory()->create([
         'signature_sha256' => hash('sha256', $contents),
         ...$attributes,
@@ -150,4 +153,16 @@ it('M-3: se programa los domingos a las 03:00 de America/Bogota', function () {
     expect($events)->toHaveCount(1)
         ->and($events->first()->expression)->toBe('0 3 * * 0')
         ->and($events->first()->timezone)->toBe('America/Bogota');
+});
+
+it('M-1 (revisión de RN-041): un archivo que no es PNG cuenta como alterado aunque su huella coincida', function () {
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>';
+    $delivery = Delivery::factory()->create(['signature_sha256' => hash('sha256', $svg)]);
+    Delivery::signatureDisk()->put($delivery->signature_path, $svg);
+
+    $this->artisan('deliveries:verify-signatures')
+        ->expectsOutputToContain("{$delivery->code}: alterada")
+        ->assertFailed();
+
+    expect(signatureIntegrityEvents()->sole()->metadata['reason'])->toBe('altered');
 });

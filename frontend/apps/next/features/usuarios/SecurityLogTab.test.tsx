@@ -297,6 +297,17 @@ describe('describeSecurityEvent: eventos agregados después de 003', () => {
     ])
   })
 
+  it('delivery_pdf_exported (RN-041): entrega del acta descargada', () => {
+    expect(
+      lines({
+        event: 'delivery_pdf_exported',
+        event_label: 'Acta de entrega descargada',
+        metadata: { delivery_id: 5, code: 'ENT-2026-0005' },
+      })
+    ).toEqual(['Entrega: ENT-2026-0005'])
+    expect(lines({ event: 'delivery_pdf_exported', metadata: { delivery_id: 6 } })).toEqual(['Entrega: #6'])
+  })
+
   it('user_created: empleado vinculado como objeto o como texto', () => {
     expect(
       lines({ event: 'user_created', metadata: { role: 'Almacenista', employee: { id: 3, name: 'Ana Gómez' } } })

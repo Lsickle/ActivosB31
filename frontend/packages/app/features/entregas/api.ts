@@ -1,4 +1,4 @@
-import { apiFetch } from '../../lib/api-client'
+import { apiDownload, apiFetch, type DownloadedFile } from '../../lib/api-client'
 import { jsonBody, query, type Paginated } from '../../lib/api-helpers'
 import type { TrackingMode } from '../configuracion/schemas'
 import type { AssetStatus } from '../activos/schemas'
@@ -127,6 +127,9 @@ export const deliveriesApi = {
   createReturn: (id: number, payload: ReturnPayload): Promise<{ data: DeliveryRecord }> =>
     apiFetch(`/api/deliveries/${id}/returns`, jsonBody('POST', payload)),
   alerts: (): Promise<{ data: OverdueDeliveryAlert[] }> => apiFetch('/api/deliveries/alerts'),
+  // Acta en PDF (attachment ENT-000123.pdf). Mismo permiso que ver la firma;
+  // 409 si la firma no pasa la verificación de integridad (RN-041; firma RN-024).
+  downloadPdf: (id: number): Promise<DownloadedFile> => apiDownload(`/api/deliveries/${id}/pdf`),
 }
 
 // D-007: requiere empleados.ver (vive en la ficha del empleado).

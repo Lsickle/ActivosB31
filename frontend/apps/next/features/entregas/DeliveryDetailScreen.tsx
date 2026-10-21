@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowLeftIcon, PenLineIcon, Undo2Icon } from 'lucide-react'
+import { ArrowLeftIcon, FileTextIcon, PenLineIcon, Undo2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import { deliveriesApi, type DeliveryRecord } from 'app/features/entregas/api'
 import { DELIVERY_KIND_LABELS } from 'app/features/entregas/schemas'
@@ -18,6 +18,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDate, formatDateTime } from '@/features/activos/format'
 import { useConfigurationOptions } from '@/features/configuracion/useConfigurationOptions'
+import { saveFile } from '@/features/reportes/download'
+import { errorMessage } from '@/features/reportes/shared'
 import { ReturnDialog } from './ReturnDialog'
 import { DeliveryStatusBadge, formatQuantity, muted } from './shared'
 
@@ -54,6 +56,43 @@ function Field({ label, children, className }: { label: string; children: React.
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="text-sm">{children}</dd>
     </div>
+  )
+}
+
+const PDF_ERROR = 'No fue posible descargar el acta.'
+const PDF_INTEGRITY_ERROR = 'La firma de esta entrega no pasó la verificación de integridad.'
+
+/**
+ * Descarga el acta en PDF (RN-041). Solo se ofrece si el backend envió
+ * signature_url: el acta incluye la firma y exige el mismo permiso.
+ */
+function DownloadActButton({ deliveryId, code }: { deliveryId: number; code: string }) {
+  const [busy, setBusy] = useState(false)
+
+  async function download() {
+    setBusy(true)
+    try {
+      const file = await deliveriesApi.downloadPdf(deliveryId)
+      saveFile(file, `${code}.pdf`)
+    } catch (error) {
+      toast.error(error instanceof ApiError && error.status === 409 ? PDF_INTEGRITY_ERROR : errorMessage(error, PDF_ERROR))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      aria-label="Descargar acta (PDF)"
+      disabled={busy}
+      aria-busy={busy}
+      onClick={download}
+    >
+      <FileTextIcon data-icon="inline-start" />
+      {busy ? 'Descargando…' : 'Descargar acta (PDF)'}
+    </Button>
   )
 }
 
@@ -121,12 +160,15 @@ function DeliveryDetail({ deliveryId }: { deliveryId: number }) {
             {DELIVERY_KIND_LABELS[record.kind] ?? record.kind_label} · {record.employee.full_name}
           </p>
         </div>
-        {canManage && hasPending && (
-          <Button onClick={() => setIsReturnOpen(true)}>
-            <Undo2Icon data-icon="inline-start" />
-            Registrar devolución
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {record.signature_url && <DownloadActButton deliveryId={record.id} code={record.code} />}
+          {canManage && hasPending && (
+            <Button onClick={() => setIsReturnOpen(true)}>
+              <Undo2Icon data-icon="inline-start" />
+              Registrar devolución
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Entregas\CreateDelivery;
+use App\Actions\RecordSecurityEvent;
 use App\Enums\DeliveryStatus;
+use App\Enums\SecurityEventType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Entregas\ListDeliveriesRequest;
 use App\Http\Requests\Entregas\StoreDeliveryRequest;
@@ -11,10 +13,14 @@ use App\Http\Resources\DeliveryResource;
 use App\Models\Delivery;
 use App\Models\Employee;
 use App\Models\Location;
+use App\Pdf\PdfRenderer;
 use App\Queries\OverdueDeliveryAlerts;
+use App\Reports\Export\ReportResponder;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 
@@ -25,6 +31,8 @@ use Illuminate\Support\Facades\Gate;
  */
 class DeliveryController extends Controller
 {
+    public const string SIGNATURE_INTEGRITY_MESSAGE = 'La firma de esta entrega no pasó la verificación de integridad; no se puede generar el acta.';
+
     public function index(ListDeliveriesRequest $request): AnonymousResourceCollection
     {
         $deliveries = Delivery::query()
@@ -71,6 +79,62 @@ class DeliveryController extends Controller
         return DeliveryResource::make($delivery->load(DeliveryResource::RELATIONS))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * RN-041: acta PDF de la entrega (artículos, quién entrega y quién recibe
+     * con su firma, devoluciones y estado actual), con el logo de la estación.
+     *
+     * - Permiso: el de ver la firma en la ficha, es decir ver la entrega y
+     *   DeliveryPolicy::viewSignature (entregas.gestionar o empleados.ver; M-1).
+     * - M-3: si la firma fue alterada o falta, 409 sin generar el PDF y evento
+     *   signature_integrity_failed con el usuario que lo intentó (misma
+     *   metadata que deliveries:verify-signatures).
+     * - RN-022: del empleado solo nombre, cargo y firma (sin documento).
+     * - Cada descarga deja delivery_pdf_exported en la bitácora.
+     */
+    public function pdf(Request $request, Delivery $delivery, PdfRenderer $renderer, RecordSecurityEvent $recordEvent): Response|JsonResponse
+    {
+        Gate::authorize('view', $delivery);
+        Gate::authorize('viewSignature', $delivery);
+
+        // M-1: una sola lectura; se incrustan los mismos bytes verificados.
+        ['png' => $signature, 'problem' => $problem] = $delivery->verifiedSignature();
+
+        if ($problem !== null || $signature === null) {
+            $recordEvent->handle(SecurityEventType::SignatureIntegrityFailed, $request->user(), metadata: [
+                'delivery_id' => $delivery->id,
+                'code' => $delivery->code,
+                'reason' => $problem ?? 'altered',
+            ]);
+
+            return response()->json(['message' => self::SIGNATURE_INTEGRITY_MESSAGE], 409);
+        }
+
+        $delivery->load([
+            ...array_filter(DeliveryResource::RELATIONS, fn (string $relation) => ! str_starts_with($relation, 'deliveredBy')),
+            'deliveredBy:id,name,employee_id',
+            'deliveredBy.employee:id,position_id',
+            'deliveredBy.employee.position:id,name',
+        ]);
+
+        $title = "Acta de entrega {$delivery->code}";
+
+        $content = $renderer->render('deliveries.pdf', [
+            'title' => $title,
+            'orientation' => 'portrait',
+            'delivery' => $delivery,
+            'signatureDataUri' => 'data:image/png;base64,'.base64_encode($signature),
+            'generatedAt' => now(Delivery::LOCAL_TIMEZONE)->format('Y-m-d H:i'),
+            'generatedBy' => $request->user()->name,
+        ]);
+
+        $recordEvent->handle(SecurityEventType::DeliveryPdfExported, $request->user(), metadata: [
+            'delivery_id' => $delivery->id,
+            'code' => $delivery->code,
+        ]);
+
+        return ReportResponder::attachment($content, 'application/pdf', "{$delivery->code}.pdf");
     }
 
     /**

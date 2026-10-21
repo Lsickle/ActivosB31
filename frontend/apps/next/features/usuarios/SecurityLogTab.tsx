@@ -147,7 +147,7 @@ function describeReportExported(metadata: Record<string, unknown>): SecurityEven
   return [...lines, ...describeUnknown(rest)]
 }
 
-function describeSignatureIntegrityFailed(metadata: Record<string, unknown>): SecurityEventDetailLine[] {
+function describeDeliveryEvent(metadata: Record<string, unknown>): SecurityEventDetailLine[] {
   const { delivery_id: deliveryId, code, reason, ...rest } = metadata
   const lines: SecurityEventDetailLine[] = []
   if (typeof code === 'string' && code !== '') {
@@ -163,8 +163,9 @@ function describeSignatureIntegrityFailed(metadata: Record<string, unknown>): Se
 
 // Convierte `metadata` (contracts/api.md, tabla de eventos) en líneas legibles.
 // Las claves desconocidas se muestran tal cual para no ocultar información.
-// report_exported y signature_integrity_failed tienen formato propio porque
-// sus claves (p. ej. `reason`) no significan lo mismo que en el resto.
+// report_exported, signature_integrity_failed y delivery_pdf_exported (RN-041)
+// tienen formato propio porque sus claves (p. ej. `reason`) no significan lo
+// mismo que en el resto.
 export function describeSecurityEvent(event: SecurityEvent): SecurityEventDetailLine[] {
   const lines: SecurityEventDetailLine[] = []
   if (event.login_attempted) {
@@ -172,7 +173,9 @@ export function describeSecurityEvent(event: SecurityEvent): SecurityEventDetail
   }
   const metadata = event.metadata ?? {}
   if (event.event === 'report_exported') return [...lines, ...describeReportExported(metadata)]
-  if (event.event === 'signature_integrity_failed') return [...lines, ...describeSignatureIntegrityFailed(metadata)]
+  if (event.event === 'signature_integrity_failed' || event.event === 'delivery_pdf_exported') {
+    return [...lines, ...describeDeliveryEvent(metadata)]
+  }
   return [...lines, ...describeGeneric(metadata).map((text) => ({ text }))]
 }
 

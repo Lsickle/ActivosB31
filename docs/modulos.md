@@ -134,6 +134,7 @@ Formato: `RN-XXX — enunciado (fuente, fecha)`.
 - **RN-038** — Los artículos por cantidad devueltos **dañados o perdidos no vuelven al stock**: se registran como pérdida. (usuario, 2026-10-17)
 - **RN-039** — Al entregar un activo serializado pasa a **Asignado**, registra **quién lo tiene** y **conserva su última ubicación**. (usuario, 2026-10-17)
 - **RN-040** — El rol **Consulta no tiene `empleados.ver`** en la precarga (RN-022); se puede conceder desde la matriz. (usuario, 2026-10-17)
+- **RN-041** — Cada entrega tiene un **acta en PDF** descargable con los artículos (cantidad, devuelta y pendiente), **quién entrega** (nombre del usuario y cargo de su empleado vinculado, si existe), **quién recibe** (nombre completo, cargo y firma) y las **devoluciones con el estado actual**, **sin número de documento** ni otros datos personales del empleado. La descarga quien ve la firma en la ficha (`entregas.ver` y además `entregas.gestionar` o `empleados.ver`); si la firma no pasa la verificación de integridad, el acta no se genera. **Todo PDF de la app** (reportes y actas) lleva el **logo de la estación** arriba a la derecha y como **marca de agua** centrada en cada página. (usuario, 2026-10-20)
 
 Decisiones de infraestructura (usuario, 2026-10-17; se verifica vigencia con `stack-advisor` antes de fijar): archivos (fotos, firmas) en **Cloudflare R2**; base de datos de producción en **Neon** con **copia diaria (`pg_dump`) a R2**; las fotos se **re-codifican al subirlas** (sin EXIF/GPS, ~1600 px). Detalle en `docs/infraestructura.md`.
 

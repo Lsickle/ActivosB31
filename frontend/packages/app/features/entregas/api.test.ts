@@ -3,8 +3,12 @@ import { deliveriesApi, employeeHoldings } from './api'
 import type { DeliveryPayload, ReturnPayload } from './schemas'
 
 const apiFetch = vi.fn()
+const apiDownload = vi.fn()
 
-vi.mock('../../lib/api-client', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }))
+vi.mock('../../lib/api-client', () => ({
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+  apiDownload: (...args: unknown[]) => apiDownload(...args),
+}))
 
 // Contrato: specs/007-modulo-entregas/plan.md ("Contrato (resumen)").
 describe('API de entregas (007, plan.md)', () => {
@@ -29,6 +33,13 @@ describe('API de entregas (007, plan.md)', () => {
 
     await deliveriesApi.list()
     expect(apiFetch).toHaveBeenLastCalledWith('/api/deliveries')
+  })
+
+  it('descarga el acta en PDF con apiDownload (sesión y CSRF)', async () => {
+    const file = { blob: new Blob(['%PDF']), filename: 'ENT-000005.pdf' }
+    apiDownload.mockResolvedValue(file)
+    await expect(deliveriesApi.downloadPdf(5)).resolves.toBe(file)
+    expect(apiDownload).toHaveBeenCalledWith('/api/deliveries/5/pdf')
   })
 
   it('obtiene la ficha con ítems, devoluciones y firma', async () => {

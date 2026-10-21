@@ -25,6 +25,7 @@ enum SecurityEventType: string
     case SettingsUpdated = 'settings_updated';
     case ReportExported = 'report_exported';
     case SignatureIntegrityFailed = 'signature_integrity_failed';
+    case DeliveryPdfExported = 'delivery_pdf_exported';
 
     public function label(): string
     {
@@ -46,6 +47,7 @@ enum SecurityEventType: string
             self::SettingsUpdated => 'Ajustes modificados',
             self::ReportExported => 'Reporte exportado',
             self::SignatureIntegrityFailed => 'Firma de entrega alterada o faltante',
+            self::DeliveryPdfExported => 'Acta de entrega descargada',
         };
     }
 }

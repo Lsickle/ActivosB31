@@ -162,6 +162,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::post('/deliveries', [DeliveryController::class, 'store'])->middleware(['body.limit:1024', 'json.body'])->name('deliveries.store');
         Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])->whereNumber('delivery')->name('deliveries.show');
         Route::post('/deliveries/{delivery}/returns', [DeliveryReturnController::class, 'store'])->whereNumber('delivery')->name('deliveries.returns.store');
+        // RN-041: acta PDF; comparte el límite de descargas de los reportes.
+        Route::get('/deliveries/{delivery}/pdf', [DeliveryController::class, 'pdf'])->whereNumber('delivery')->middleware('throttle:report-downloads')->name('deliveries.pdf');
         // D-007: tenencias del empleado (empleados.ver).
         Route::get('/employees/{employee}/holdings', [EmployeeHoldingController::class, 'index'])->whereNumber('employee')->name('employees.holdings.index');
 
